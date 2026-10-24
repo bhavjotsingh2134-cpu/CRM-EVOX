@@ -7330,7 +7330,7 @@ function sha256hex(msg){
           convertedMonth: monthYearShort()
         };
         appState.pds.unshift(newPD);
-        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newPD.id, 'PD'); }, 450);   // first order done or not?
+        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newPD.id, 'PD', 'required'); }, 450);   // first order done or not?
         
         migrateLeadHistory(lead.name, newPD.name, 'PD');
 
@@ -7369,7 +7369,7 @@ function sha256hex(msg){
           convertedMonth: monthYearShort()
         };
         appState.sds.unshift(newSD);
-        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newSD.id, 'SD'); }, 450);   // first order done or not?
+        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newSD.id, 'SD', 'required'); }, 450);   // first order done or not?
         migrateLeadHistory(lead.name, newSD.name, 'SD');
 
 
@@ -7524,7 +7524,7 @@ function sha256hex(msg){
       };
 
       appState.pds.unshift(newPD);
-        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newPD.id, 'PD'); }, 450);   // first order done or not?
+        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newPD.id, 'PD', 'required'); }, 450);   // first order done or not?
       appState.leads = appState.leads.filter(l => l.id !== p.leadId);
       migrateLeadHistory(p.leadName, newPD.name, 'PD');
 
@@ -7583,7 +7583,7 @@ function sha256hex(msg){
       };
 
       appState.sds.unshift(newSD);
-        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newSD.id, 'SD'); }, 450);   // first order done or not?
+        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newSD.id, 'SD', 'required'); }, 450);   // first order done or not?
       appState.leads = appState.leads.filter(l => l.id !== p.leadId);
       migrateLeadHistory(p.leadName, newSD.name, 'SD');
 
@@ -11009,7 +11009,7 @@ function sha256hex(msg){
           activeSubDealers: 8
         };
         appState.pds.unshift(newPD);
-        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newPD.id, 'PD'); }, 450);   // first order done or not?
+        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newPD.id, 'PD', 'required'); }, 450);   // first order done or not?
 
         // Also add to FIXED_PROJECTIONS_DATA so it appears in Dealer Projections
         /* projections are added by the ASM/RSM in Dealer projection, not auto-generated */
@@ -11045,7 +11045,7 @@ function sha256hex(msg){
           fulfillmentRate: '96.5%'
         };
         appState.sds.unshift(newSD);
-        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newSD.id, 'SD'); }, 450);   // first order done or not?
+        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newSD.id, 'SD', 'required'); }, 450);   // first order done or not?
         
 
         // Also add to FIXED_PROJECTIONS_DATA so the new SD is immediately available in Dealer projection!
@@ -13843,10 +13843,9 @@ function sha256hex(msg){
     const tYearNum = parseInt(periodYear, 10) || new Date().getFullYear();
 
     const dealerOrders = (appState.orders || []).filter(o => {
-      if (dealerId && o.buyerId && o.buyerId === dealerId) return true;
+      if (dealerId && o.buyerId) return o.buyerId === dealerId;      // id match is exact
       const bName = norm(cleanDealerName(o.buyerName || ''));
-      if (cleanDName && (bName.includes(cleanDName) || cleanDName.includes(bName))) return true;
-      return false;
+      return !!(cleanDName && bName && bName === cleanDName);        // otherwise exact name only
     });
 
     let w1 = 0, w2 = 0, w3 = 0, w4 = 0, w5 = 0;
@@ -18287,7 +18286,7 @@ function sha256hex(msg){
         <h3 class="font-bold text-slate-900 text-base mt-0.5" id="foTitle">First order</h3>
         <p class="text-xs text-slate-500">Has this dealer already placed its first order with the company?</p>
       </div>
-      <button type="button" onclick="closeModal('firstOrderModal')" class="text-slate-400 hover:text-slate-600 p-1">&times;</button>
+      <button type="button" id="foCloseX" onclick="closeModal('firstOrderModal')" class="text-slate-400 hover:text-slate-600 p-1">&times;</button>
     </div>
     <form onsubmit="saveFirstOrder(event)" class="mt-4 space-y-3.5 text-xs">
       <input type="hidden" id="foEntityId"><input type="hidden" id="foEntityType">
@@ -18324,7 +18323,7 @@ function sha256hex(msg){
         <p class="text-[10px] text-slate-400 mt-1">Filled from the products above at list price. Change it if the dealer got a discount, or type it directly if you don't remember the products.</p>
       </div>
       <div class="pt-3 flex justify-between gap-2 border-t border-slate-100">
-        <button type="button" onclick="closeModal('firstOrderModal')" class="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50">Decide later</button>
+        <button type="button" id="foLater" onclick="closeModal('firstOrderModal')" class="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50">Decide later</button><span id="foReqNote" style="display:none" class="text-[11px] text-rose-600 font-semibold self-center">Required to finish adding this dealer</span>
         <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-bold shadow-sm">Save</button>
       </div>
     </form>
@@ -18412,9 +18411,9 @@ function sha256hex(msg){
     var norm = function (x) { return String(x || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
     var cn = norm(cleanDealerName(d.name || ''));
     return (window.appState.orders || []).filter(function (o) {
-      if (d.id && o.buyerId && o.buyerId === d.id) return true;
+      if (d.id && o.buyerId) return o.buyerId === d.id;
       var b = norm(cleanDealerName(o.buyerName || ''));
-      return !!(cn && b && (b.indexOf(cn) !== -1 || cn.indexOf(b) !== -1));
+      return !!(cn && b && b === cn);
     });
   }
   var MONTHS = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };
@@ -18484,7 +18483,8 @@ function sha256hex(msg){
       var pr = projs.filter(function (p) { return (p.dealerId && p.dealerId === d.id) || cn(p.name) === cn(d.name); })[0] || null;
       var all = dealerOrdersAll(d), act = window.getDealerOrdersActuals(d.id, d.name, mName, yStr);
       var projL = pr ? WK.reduce(function (a, w) { return a + parseProjectionNum(pr[w]); }, 0) : 0;
-      var row = { d: d, pr: pr, projL: projL, actL: act.totalLakhs, act: act, nOrders: all.length, last: all.map(function (o) { return o.date || ''; }).sort().pop() || '', first: all.map(function (o) { return o.date || ''; }).sort()[0] || '' };
+      var o1 = all.slice().sort(function (a, b) { return String(a.date || '').localeCompare(String(b.date || '')); })[0];
+      var row = { firstVal: o1 ? (Number(o1.total) || 0) / 100000 : 0, d: d, pr: pr, projL: projL, actL: act.totalLakhs, act: act, nOrders: all.length, last: all.map(function (o) { return o.date || ''; }).sort().pop() || '', first: all.map(function (o) { return o.date || ''; }).sort()[0] || '' };
       if (all.length) { row.prods = pr ? (productsOfPlan(pr.plan) || pr.line || '') : ''; G[d.type === 'PD' ? 'repPD' : 'repSD'].push(row); }
       else {
         var plan = d.e && d.e.firstOrderPlan;
@@ -18528,8 +18528,27 @@ function sha256hex(msg){
     var nVal = function (k) { return sum(G[k], 'val'); };
     var openTotal = nVal('newPD') + nVal('newSD');
     var show = function (k) { return seg === 'all' || seg === k; };
+    var mk = yStr + '-' + ('0' + mNum).slice(-2);
+    var fmt = function (l) { l = Math.round(l * 100) / 100; return l >= 100 ? '₹' + (l / 100).toFixed(2) + ' Cr' : '₹' + l.toFixed(2) + ' L'; };
+    var openRows = G.newPD.concat(G.newSD).filter(function (r) { return r.planned; });
+    var dueRows = openRows.filter(function (r) { return (r.exp || '').indexOf(mk) === 0; });
+    var restRows = openRows.filter(function (r) { return (r.exp || '').indexOf(mk) !== 0; });
+    var wonRows = G.repPD.concat(G.repSD).filter(function (r) { return (r.first || '').indexOf(mk) === 0; });
+    var openVal = sum(openRows, 'val'), dueVal = sum(dueRows, 'val'), restVal = sum(restRows, 'val'), wonVal = sum(wonRows, 'firstVal');
+    var totalVal = openVal + wonVal, pct = totalVal ? Math.round(wonVal / totalVal * 100) : 0;
+    var cnt = function (arr) { var p = arr.filter(function (r) { return r.d.type === 'PD'; }).length; return p + ' PD · ' + (arr.length - p) + ' SD'; };
+    var ntile = function (t, v, sub, cls) { return '<div class="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-xs"><span class="text-[10px] font-bold uppercase text-slate-500">' + t + '</span><div class="text-xl font-bold mt-1 ' + cls + '">' + v + '</div><span class="text-[11px] text-slate-500">' + sub + '</span></div>'; };
+    var banner = '<div class="bg-slate-900 rounded-2xl p-4 space-y-3 text-white"><div class="flex items-center justify-between flex-wrap gap-2"><div><span class="text-[10px] font-bold uppercase text-slate-300">New-dealer first orders · ' + esc(period) + '</span><div class="text-2xl font-extrabold">' + fmt(totalVal) + ' <span class="text-xs font-semibold text-slate-300">total new-order pipeline</span></div></div><div class="text-right"><div class="text-lg font-bold text-emerald-400">' + wonRows.length + ' conversion' + (wonRows.length === 1 ? '' : 's') + '</div><span class="text-[11px] text-slate-300">first orders bagged this month</span></div></div>' +
+      '<div class="w-full h-2 bg-slate-700 rounded-full overflow-hidden"><div class="h-2 bg-emerald-500" style="width:' + pct + '%"></div></div>' +
+      '<div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 text-slate-900">' +
+        ntile('Total new-order pipeline', fmt(totalVal), (openRows.length + wonRows.length) + ' dealers (open + bagged)', 'text-slate-900') +
+        ntile('Expected to close this month', fmt(dueVal), dueRows.length + ' dealers with a date in ' + esc(mName) + ' · ' + cnt(dueRows), 'text-indigo-700') +
+        ntile('Bagged this month', fmt(wonVal), wonRows.length + ' conversions · ' + cnt(wonRows) + ' · ' + pct + '% of total', 'text-emerald-600') +
+        ntile('Open, later or no date', fmt(restVal), restRows.length + ' dealers · ' + cnt(restRows), 'text-amber-700') +
+      '</div></div>';
     wrap.innerHTML =
-      '<div class="flex items-center justify-between flex-wrap gap-2"><div class="text-xs text-slate-600">Open first-order pipeline: <b class="text-indigo-700 text-sm">₹' + (Math.round(openTotal * 100) / 100) + ' L</b> across ' + (G.newPD.length + G.newSD.length) + ' new dealers</div>' +
+      banner +
+      '<div class="flex items-center justify-between flex-wrap gap-2"><div class="text-xs text-slate-500">Click a tile or chip to filter</div>' +
       '<div class="flex flex-wrap gap-1.5">' + chip('all', 'All', dealers.filter(function (d) { return stateOk(d.state, f); }).length) + chip('newPD', 'New PD', G.newPD.length) + chip('newSD', 'New SD', G.newSD.length) + chip('repPD', 'Repeat PD', G.repPD.length) + chip('repSD', 'Repeat SD', G.repSD.length) + '</div></div>' +
       '<div class="grid grid-cols-2 lg:grid-cols-4 gap-3">' +
         tile('New PD · open pipeline', '₹' + (Math.round(nVal('newPD') * 100) / 100) + ' L', G.newPD.length + ' PD waiting for first order', 'text-indigo-700', 'newPD') +
@@ -18573,6 +18592,12 @@ function sha256hex(msg){
     var e = (type === 'PD' ? window.appState.pds : window.appState.sds).filter(function (x) { return x.id === id; })[0];
     if (!e) return;
     fo.rows = [];
+    var req = mode === 'required' || !!e.firstOrderPending;
+    if (req) e.firstOrderPending = true;
+    document.getElementById('foCloseX').style.display = req ? 'none' : '';
+    document.getElementById('foLater').style.display = req ? 'none' : '';
+    document.getElementById('foReqNote').style.display = req ? '' : 'none';
+    window.__foRequired = req;
     document.getElementById('foEntityId').value = id; document.getElementById('foEntityType').value = type;
     document.getElementById('foTitle').innerText = 'First order: ' + e.name;
     var b = document.getElementById('foTypeBadge'); b.innerText = type;
@@ -18624,10 +18649,28 @@ function sha256hex(msg){
         showToast('Saved: ' + e.name + ' is in the New ' + type + ' pipeline, expected ' + exp + '.', 'success');
       } else showToast('Saved: ' + e.name + ' is in the open New ' + type + ' pipeline (no date).', 'success');
     }
+    delete e.firstOrderPending; window.__foRequired = false;
     closeModal('firstOrderModal');
     ['renderOrdersTable', 'renderProjectionsTable', 'renderPDList', 'renderSDList', 'renderDashboard', 'updateBadgesAndCounters'].forEach(function (f) { try { if (typeof window[f] === 'function') window[f](); } catch (x) {} });
     if (typeof saveLocalAppState === 'function') saveLocalAppState();
   };
+  var _cm = window.closeModal;
+  if (typeof _cm === 'function') window.closeModal = function (id) {
+    if (id === 'firstOrderModal' && window.__foRequired) { showToast('Please answer: has this dealer placed its first order?', 'warning'); return; }
+    return _cm.apply(this, arguments);
+  };
+  // if the page was closed before answering, ask again
+  function pendingCheck() {
+    try {
+      var A = window.appState; if (!A || !(window.CRMAuth && CRMAuth.currentRole && CRMAuth.currentRole())) return;
+      var m = document.getElementById('firstOrderModal'); if (!m || !m.classList.contains('hidden')) return;
+      var any = null, type = '';
+      (A.pds || []).forEach(function (e) { if (!any && e.firstOrderPending) { any = e; type = 'PD'; } });
+      (A.sds || []).forEach(function (e) { if (!any && e.firstOrderPending) { any = e; type = 'SD'; } });
+      if (any) window.askFirstOrder(any.id, type, 'required');
+    } catch (x) {}
+  }
+  setInterval(pendingCheck, 5000); setTimeout(pendingCheck, 3000);
   // show "set first order" on the dossier of a PD/SD that has not been asked yet
   var _od = window.openDossierModal;
   if (typeof _od === 'function') window.openDossierModal = function () {
