@@ -4740,6 +4740,8 @@ function sha256hex(msg){
           </div>
         </div>
 
+        <div id="foEmbed_cv" style="display:none"></div>
+
         <!-- Transfer Integrity Notice -->
         <div class="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-[11px] text-blue-900 flex items-start space-x-2">
           <i data-lucide="info" class="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5"></i>
@@ -6326,6 +6328,8 @@ function sha256hex(msg){
           </div>
         </div>
 
+        <div id="foEmbed_dx" style="display:none"></div>
+
         <!-- Footer / Policy Notice -->
         <div class="p-3 bg-slate-100 rounded-xl text-[11px] text-slate-600" id="directAddFooterNote">
           <span class="font-bold text-amber-700">Policy:</span> PD added by ASM routes into the RSM approval queue. If rejected, it becomes an SD.
@@ -7262,6 +7266,11 @@ function sha256hex(msg){
 
       const lead = currentConvertingLead;
       const target = currentConversionTarget || 'PD';
+      if (target === 'PD' || target === 'SD') {                      // first order answer is required
+        const __fo = window.foEmbedRead && window.foEmbedRead('cv');
+        if (!__fo) return;
+        window.__foCarry = __fo;
+      }
 
       const now = new Date();
       const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -7295,9 +7304,11 @@ function sha256hex(msg){
             products: pdProducts.length > 0 ? pdProducts : ['OC', 'CPAP/BiPAP', 'WC'],
             industryType: industryType,
             channel: channel,
-            date: 'Today'
+            date: 'Today',
+            firstOrder: window.__foCarry || null
           };
           appState.pendingPdApprovals.push(approvalReq);
+          window.__foCarry = null;
           closeModal('convertLeadModal');
           renderPendingRSMApprovals();
           updateBadgesAndCounters();
@@ -7330,7 +7341,7 @@ function sha256hex(msg){
           convertedMonth: monthYearShort()
         };
         appState.pds.unshift(newPD);
-        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newPD.id, 'PD', 'required'); }, 450);   // first order done or not?
+        window.firstOrderAfterCreate(newPD.id, 'PD', window.__foCarry); window.__foCarry = null;   // first order done or not?
         
         migrateLeadHistory(lead.name, newPD.name, 'PD');
 
@@ -7369,7 +7380,7 @@ function sha256hex(msg){
           convertedMonth: monthYearShort()
         };
         appState.sds.unshift(newSD);
-        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newSD.id, 'SD', 'required'); }, 450);   // first order done or not?
+        window.firstOrderAfterCreate(newSD.id, 'SD', window.__foCarry); window.__foCarry = null;   // first order done or not?
         migrateLeadHistory(lead.name, newSD.name, 'SD');
 
 
@@ -7524,7 +7535,7 @@ function sha256hex(msg){
       };
 
       appState.pds.unshift(newPD);
-        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newPD.id, 'PD', 'required'); }, 450);   // first order done or not?
+        window.firstOrderAfterCreate(newPD.id, 'PD', p.firstOrder); window.__foCarry = null;   // first order done or not?
       appState.leads = appState.leads.filter(l => l.id !== p.leadId);
       migrateLeadHistory(p.leadName, newPD.name, 'PD');
 
@@ -7583,7 +7594,7 @@ function sha256hex(msg){
       };
 
       appState.sds.unshift(newSD);
-        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newSD.id, 'SD', 'required'); }, 450);   // first order done or not?
+        window.firstOrderAfterCreate(newSD.id, 'SD', p.firstOrder); window.__foCarry = null;   // first order done or not?
       appState.leads = appState.leads.filter(l => l.id !== p.leadId);
       migrateLeadHistory(p.leadName, newSD.name, 'SD');
 
@@ -10948,6 +10959,12 @@ function sha256hex(msg){
         return;
       }
 
+      if (type === 'PD' || type === 'SD') {                          // first order answer is required
+        const __fo = window.foEmbedRead && window.foEmbedRead('dx');
+        if (!__fo) return;
+        window.__foCarry = __fo;
+      }
+
       if (type === 'PD') {
         const pdProducts = Array.from(document.querySelectorAll('input[name="directPdProducts"]:checked')).map(el => el.value);
         const problemBrand = document.getElementById('directPdProblemBrand')?.value.trim() || '';
@@ -10976,9 +10993,11 @@ function sha256hex(msg){
             products: pdProducts.length > 0 ? pdProducts : ['OC', 'CPAP/BiPAP', 'WC'],
             industryType: industryType,
             channel: channel,
-            date: 'Today'
+            date: 'Today',
+            firstOrder: window.__foCarry || null
           };
           appState.pendingPdApprovals.push(approvalReq);
+          window.__foCarry = null;
           closeModal('directAddEntityModal');
           const formElem = document.getElementById('directAddEntityForm');
           if (formElem) formElem.reset();
@@ -11009,7 +11028,7 @@ function sha256hex(msg){
           activeSubDealers: 8
         };
         appState.pds.unshift(newPD);
-        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newPD.id, 'PD', 'required'); }, 450);   // first order done or not?
+        window.firstOrderAfterCreate(newPD.id, 'PD', window.__foCarry); window.__foCarry = null;   // first order done or not?
 
         // Also add to FIXED_PROJECTIONS_DATA so it appears in Dealer Projections
         /* projections are added by the ASM/RSM in Dealer projection, not auto-generated */
@@ -11045,7 +11064,7 @@ function sha256hex(msg){
           fulfillmentRate: '96.5%'
         };
         appState.sds.unshift(newSD);
-        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newSD.id, 'SD', 'required'); }, 450);   // first order done or not?
+        window.firstOrderAfterCreate(newSD.id, 'SD', window.__foCarry); window.__foCarry = null;   // first order done or not?
         
 
         // Also add to FIXED_PROJECTIONS_DATA so the new SD is immediately available in Dealer projection!
@@ -18609,35 +18628,29 @@ function sha256hex(msg){
     if (mode === 'yes') { document.querySelector('input[name="foDone"][value="yes"]').checked = true; foSyncValue(); }
     foRender(); foToggle(); foSyncValue(); openModal('firstOrderModal');
   };
-  window.saveFirstOrder = function (ev) {
-    ev.preventDefault();
-    var A = window.appState, id = document.getElementById('foEntityId').value, type = document.getElementById('foEntityType').value;
-    var e = (type === 'PD' ? A.pds : A.sds).filter(function (x) { return x.id === id; })[0]; if (!e) return;
-    var rows = fo.rows.filter(function (r) { return prod(r.p) && r.q > 0; });
+  // Apply a first-order answer to a dealer: past order (done) or open pipeline (not done)
+  function applyFirstOrderData(e, type, data) {
+    var A = window.appState, rows = (data.rows || []).filter(function (r) { return prod(r.p) && r.q > 0; });
     var rep = e.assignedAsm || e.rep || (typeof currentRepName === 'function' ? currentRepName() : '');
-    if (foYes()) {
-      var date = document.getElementById('foDate').value, value = Math.round(parseFloat(document.getElementById('foValue').value) || 0);
-      if (!date) { showToast('Enter the date of the first order.', 'warning'); return; }
-      if (value <= 0) { showToast('Enter the first order value (or add products).', 'warning'); return; }
+    if (data.done) {
+      var value = Math.round(Number(data.value) || 0);
       var items = rows.map(function (r) { var p = prod(r.p), g = p.basePrice * r.q; return { productId: p.id, name: p.name, qty: r.q, price: p.basePrice, discountMode: 'pct', discountFlat: 0, discountPct: 0, discountAmount: 0, netTotal: g }; });
-      var seller = 'Evox Central Factory Depot', sellerPdId = null, sellerType = 'PD';
+      var seller = 'Evox Central Factory Depot', sellerPdId = null;
       if (type === 'SD') {
         var par = (A.pds || []).filter(function (p) { return p.name === e.parentPd; })[0];
         seller = par ? par.name + ' (' + par.id + ')' : (e.parentPd || 'Primary Distributor'); sellerPdId = par ? par.id : null;
       }
       A.orders.unshift({ id: uid('ORD-', 9019), type: type === 'PD' ? 'PRIMARY' : 'SECONDARY', buyerId: e.id, buyerName: e.name, buyerType: type, buyerState: e.state || 'Pan-India',
-        seller: seller, sellerPdId: sellerPdId, sellerType: sellerType, inquiryId: null, date: date, items: items, subtotal: value, discountAmount: 0, total: value, preTax: true,
+        seller: seller, sellerPdId: sellerPdId, sellerType: 'PD', inquiryId: null, date: data.date, items: items, subtotal: value, discountAmount: 0, total: value, preTax: true,
         status: 'Completed', historical: true, firstOrder: true, rep: rep, assignedAsm: rep });
-      e.firstOrderDone = true; e.firstOrderDate = date; e.lastOrderDate = date; e.totalOrders = (e.totalOrders || 0) + 1;
+      e.firstOrderDone = true; e.firstOrderDate = data.date; e.lastOrderDate = data.date; e.totalOrders = (e.totalOrders || 0) + 1;
+      delete e.firstOrderPlan; delete e.firstOrderProducts; delete e.firstOrderExpected;
       showToast('First order of ₹' + value.toLocaleString('en-IN') + ' recorded for ' + e.name + '.', 'success');
     } else {
-      var exp = document.getElementById('foExpDate').value;
-      if (!rows.length) { showToast('Add at least one product they are expected to take.', 'warning'); return; }
-      var key = function (n) { return cleanDealerName(n || '').toLowerCase(); };
-      var FP = window.FIXED_PROJECTIONS_DATA;
-      for (var k = FP.length - 1; k >= 0; k--) { var q = FP[k]; if (q && q.newDealerFirstOrder && ((q.dealerId && q.dealerId === e.id) || key(q.name) === key(e.name))) FP.splice(k, 1); }   // replace the earlier plan
+      var exp = data.exp || '', key = function (n) { return cleanDealerName(n || '').toLowerCase(); }, FP = window.FIXED_PROJECTIONS_DATA;
+      for (var k = FP.length - 1; k >= 0; k--) { var q = FP[k]; if (q && q.newDealerFirstOrder && ((q.dealerId && q.dealerId === e.id) || key(q.name) === key(e.name))) FP.splice(k, 1); }
       var summary = rows.map(function (r) { return r.q + '× ' + shortName(prod(r.p)); }).join(', ');
-      e.firstOrderDone = false; e.firstOrderPlan = rows.map(function (r) { return { p: r.p, q: r.q }; }); e.firstOrderProducts = summary; e.firstOrderExpected = exp || '';
+      e.firstOrderDone = false; e.firstOrderPlan = rows.map(function (r) { return { p: r.p, q: r.q }; }); e.firstOrderProducts = summary; e.firstOrderExpected = exp;
       if (exp) {
         var dt = new Date(exp + 'T00:00:00'), MN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         var period = MN[dt.getMonth()] + ' ' + dt.getFullYear(), wk = weekOf(dt.getDate()), lakhs = Math.round(weekLakhs(rows) * 100) / 100;
@@ -18649,11 +18662,95 @@ function sha256hex(msg){
         showToast('Saved: ' + e.name + ' is in the New ' + type + ' pipeline, expected ' + exp + '.', 'success');
       } else showToast('Saved: ' + e.name + ' is in the open New ' + type + ' pipeline (no date).', 'success');
     }
-    delete e.firstOrderPending; window.__foRequired = false;
-    closeModal('firstOrderModal');
+    delete e.firstOrderPending;
     ['renderOrdersTable', 'renderProjectionsTable', 'renderPDList', 'renderSDList', 'renderDashboard', 'updateBadgesAndCounters'].forEach(function (f) { try { if (typeof window[f] === 'function') window[f](); } catch (x) {} });
     if (typeof saveLocalAppState === 'function') saveLocalAppState();
+  }
+  window.saveFirstOrder = function (ev) {
+    ev.preventDefault();
+    var A = window.appState, id = document.getElementById('foEntityId').value, type = document.getElementById('foEntityType').value;
+    var e = (type === 'PD' ? A.pds : A.sds).filter(function (x) { return x.id === id; })[0]; if (!e) return;
+    var rows = fo.rows.filter(function (r) { return prod(r.p) && r.q > 0; }), data;
+    if (foYes()) {
+      var date = document.getElementById('foDate').value, value = Math.round(parseFloat(document.getElementById('foValue').value) || 0);
+      if (!date) { showToast('Enter the date of the first order.', 'warning'); return; }
+      if (value <= 0) { showToast('Enter the first order value (or add products).', 'warning'); return; }
+      data = { done: true, date: date, value: value, rows: rows };
+    } else {
+      if (!rows.length) { showToast('Add at least one product they are expected to take.', 'warning'); return; }
+      data = { done: false, exp: document.getElementById('foExpDate').value || '', rows: rows };
+    }
+    applyFirstOrderData(e, type, data);
+    window.__foRequired = false;
+    closeModal('firstOrderModal');
   };
+  // after a PD/SD is created: apply the answer given in the form, or ask (popup) if there is none
+  window.firstOrderAfterCreate = function (id, type, data) {
+    var e = (type === 'PD' ? window.appState.pds : window.appState.sds).filter(function (x) { return x.id === id; })[0]; if (!e) return;
+    if (data && (data.done === true || data.done === false)) applyFirstOrderData(e, type, data);
+    else setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(id, type, 'required'); }, 450);
+  };
+
+  // ---------- first-order block inside the Convert Lead and Direct Add forms ----------
+  var E = {};
+  function eState(p) { return E[p] || (E[p] = { done: null, date: todayStr(), value: '', exp: '', rows: [] }); }
+  function eSync(p) { var st = eState(p); if (st.rows.length) st.value = String(st.rows.reduce(function (a, r) { var q = prod(r.p); return a + (q ? q.basePrice * r.q : 0); }, 0)); }
+  function eRender(p) {
+    var box = document.getElementById('foEmbed_' + p); if (!box) return;
+    var st = eState(p), opts = orderable(), q = "'" + p + "'";
+    var rows = st.rows.map(function (r, i) {
+      return '<div class="flex items-center gap-1.5"><select onchange="foeSet(' + q + ',' + i + ',\'p\',this.value)" class="flex-1 min-w-0 p-1.5 bg-white border border-slate-300 rounded-lg text-[11px] font-semibold">' +
+        opts.map(function (o) { return '<option value="' + esc(o.id) + '"' + (o.id === r.p ? ' selected' : '') + '>' + esc(shortName(o)) + ' — ₹' + Number(o.basePrice).toLocaleString('en-IN') + '</option>'; }).join('') + '</select>' +
+        '<input type="number" min="1" value="' + esc(r.q) + '" oninput="foeSet(' + q + ',' + i + ',\'q\',this.value)" class="w-16 p-1.5 border border-slate-300 rounded-lg text-center font-mono font-bold text-[11px]" title="Quantity">' +
+        '<button type="button" onclick="foeRem(' + q + ',' + i + ')" class="p-1 text-slate-400 hover:text-rose-600">&times;</button></div>';
+    }).join('') || '<p class="text-[11px] text-slate-400">No product added yet.</p>';
+    var yes = st.done === true, no = st.done === false;
+    box.innerHTML = '<div class="space-y-3 bg-amber-50/60 p-4 rounded-xl border border-amber-300">' +
+      '<div class="flex items-center justify-between pb-2 border-b border-amber-200"><span class="font-bold text-amber-900 text-xs uppercase">First order with the company <span class="text-rose-500">*</span></span><span class="text-[10px] text-rose-600 font-semibold">Required</span></div>' +
+      '<p class="text-xs text-slate-600">Has this dealer already placed its first order? (Enter old dealers as "Yes" with the real date.)</p>' +
+      '<div class="grid grid-cols-2 gap-3">' +
+        '<label class="cursor-pointer border rounded-xl p-2.5 flex items-center gap-2 ' + (yes ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 bg-white') + '"><input type="radio" name="foe_' + p + '" ' + (yes ? 'checked' : '') + ' onchange="foeDone(' + q + ',true)"><span class="font-bold text-slate-800">Yes, first order done</span></label>' +
+        '<label class="cursor-pointer border rounded-xl p-2.5 flex items-center gap-2 ' + (no ? 'border-amber-600 bg-amber-100' : 'border-slate-200 bg-white') + '"><input type="radio" name="foe_' + p + '" ' + (no ? 'checked' : '') + ' onchange="foeDone(' + q + ',false)"><span class="font-bold text-slate-800">No, not yet</span></label></div>' +
+      (st.done === null ? '' :
+        (yes ? '<div><label class="block font-semibold text-slate-700 mb-1">Date of first order</label><input type="date" max="' + todayStr() + '" value="' + esc(st.date) + '" oninput="foeField(' + q + ',\'date\',this.value)" class="w-full p-2.5 border border-slate-300 rounded-xl bg-white"></div>'
+             : '<div><label class="block font-semibold text-slate-700 mb-1">Expected date <span class="font-normal text-slate-400">(optional, leave empty if unknown)</span></label><input type="date" min="' + todayStr() + '" value="' + esc(st.exp) + '" oninput="foeField(' + q + ',\'exp\',this.value)" class="w-full p-2.5 border border-slate-300 rounded-xl bg-white"></div>') +
+        '<div><label class="block font-semibold text-slate-700 mb-1">' + (yes ? 'Products in the first order (optional)' : 'Which products will they take? <span class="text-rose-500">*</span>') + '</label><div class="space-y-1.5">' + rows + '</div><button type="button" onclick="foeAdd(' + q + ')" class="mt-1.5 text-[11px] font-bold text-indigo-600 hover:text-indigo-800">+ Add product</button></div>' +
+        (yes ? '<div><label class="block font-semibold text-slate-700 mb-1">First order value (₹, before taxes) <span class="text-rose-500">*</span></label><input type="number" min="0" step="any" value="' + esc(st.value) + '" oninput="foeField(' + q + ',\'value\',this.value)" class="w-full p-2.5 border border-slate-300 rounded-xl bg-white font-mono font-bold"><p class="text-[10px] text-slate-400 mt-1">Fills from the products at list price. Change it for a discount, or type it directly if you do not remember the products.</p></div>' : '')) +
+      '</div>';
+  }
+  window.foeDone = function (p, v) { eState(p).done = v; eRender(p); };
+  window.foeAdd = function (p) { var f = orderable()[0]; if (!f) return; eState(p).rows.push({ p: f.id, q: 1 }); eSync(p); eRender(p); };
+  window.foeRem = function (p, i) { eState(p).rows.splice(i, 1); eSync(p); eRender(p); };
+  window.foeSet = function (p, i, f, v) { var r = eState(p).rows[i]; if (!r) return; if (f === 'q') r.q = Math.max(1, parseInt(v, 10) || 1); else r.p = v; eSync(p); if (f === 'p') eRender(p); else { var inp = document.querySelector('#foEmbed_' + p + ' input[type=number][step=any]'); if (inp) inp.value = eState(p).value; } };
+  window.foeField = function (p, k, v) { eState(p)[k] = v; };
+  window.foEmbedRead = function (p) {
+    var st = eState(p), rows = st.rows.filter(function (r) { return prod(r.p) && r.q > 0; });
+    var fail = function (m) { showToast(m, 'warning'); var b = document.getElementById('foEmbed_' + p); if (b && b.scrollIntoView) b.scrollIntoView({ block: 'center', behavior: 'smooth' }); return null; };
+    if (st.done === null) return fail('Please answer: has this dealer placed its first order? (Yes or No)');
+    if (st.done) {
+      if (!st.date) return fail('Enter the date of the first order.');
+      var v = Math.round(parseFloat(st.value) || 0);
+      if (v <= 0) return fail('Enter the first order value (or add products).');
+      return { done: true, date: st.date, value: v, rows: rows };
+    }
+    if (!rows.length) return fail('Add at least one product this dealer is expected to take.');
+    return { done: false, exp: st.exp || '', rows: rows };
+  };
+  function showEmbed(p, on) { var b = document.getElementById('foEmbed_' + p); if (!b) return; b.style.display = on ? '' : 'none'; if (on) eRender(p); }
+  var _tc = window.toggleConversionTarget;
+  if (typeof _tc === 'function') window.toggleConversionTarget = function (t) { var r = _tc.apply(this, arguments); showEmbed('cv', t === 'PD' || t === 'SD'); return r; };
+  var _sd = window.selectDirectAddType;
+  if (typeof _sd === 'function') window.selectDirectAddType = function (t) { var r = _sd.apply(this, arguments); showEmbed('dx', t === 'PD' || t === 'SD'); return r; };
+  var _om = window.openModal;
+  if (typeof _om === 'function') window.openModal = function (id) {
+    if (id === 'convertLeadModal') delete E.cv;
+    if (id === 'directAddEntityModal') delete E.dx;
+    var r = _om.apply(this, arguments);
+    if (id === 'convertLeadModal') { var t = window.currentConversionTarget || 'PD'; showEmbed('cv', t === 'PD' || t === 'SD'); }
+    if (id === 'directAddEntityModal') { var t2 = window.currentDirectAddType || 'PD'; showEmbed('dx', t2 === 'PD' || t2 === 'SD'); }
+    return r;
+  };
+
   var _cm = window.closeModal;
   if (typeof _cm === 'function') window.closeModal = function (id) {
     if (id === 'firstOrderModal' && window.__foRequired) { showToast('Please answer: has this dealer placed its first order?', 'warning'); return; }
