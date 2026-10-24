@@ -622,6 +622,7 @@ function sha256hex(msg){
 
       var API = window.CRMScope = {
         refresh: function () {
+          try { (MASTER.orders || []).forEach(function (o) { if (o && !o.preTax && Number(o.gstAmount) > 0) { o.total = Math.max(0, (Number(o.total) || 0) - Number(o.gstAmount)); o.gstAmount = 0; o.preTax = true; } }); } catch (e) {}   // sales are tracked before taxes
           var A = window.CRMAuth, role = A && A.currentRole ? A.currentRole() : null;
           scope = { all: false, names: [], me: null, role: role };
           if (!role) return scope;
@@ -3427,6 +3428,15 @@ function sha256hex(msg){
           </div>
         </div>
 
+        <!-- Live team locations -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-xs p-3.5">
+          <div class="flex items-center justify-between pb-2">
+            <span class="font-bold text-xs text-slate-900 flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>Live team locations</span>
+            <span class="text-[10px] text-slate-500">Updates about every 20 seconds while a rep has the app open</span>
+          </div>
+          <div id="liveTeamBody" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+        </div>
+
         <!-- Dynamic Content Area: Map on Left, Timeline / Live Feed on Right -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
           <!-- Left: Interactive Leaflet Route Map -->
@@ -3900,7 +3910,7 @@ function sha256hex(msg){
                     <th class="p-3.5">SKU ID &amp; Medical Equipment</th>
                     <th class="p-3.5">Category</th>
                     <th class="p-3.5 text-right">Base List Price (₹)</th>
-                    <th class="p-3.5">Tax &amp; HSN</th>
+                    <th class="p-3.5">HSN</th>
                     <th class="p-3.5">Warranty &amp; MOQ</th>
                     <th class="p-3.5">Clinical Specs</th>
                     <th class="p-3.5 text-right">Actions</th>
@@ -4228,7 +4238,7 @@ function sha256hex(msg){
             <label class="block font-semibold text-slate-700 mb-1">Base Price (₹ INR) <span class="text-rose-500">*</span></label>
             <input type="number" id="adminProductPrice" required min="1" step="50" placeholder="52000" class="w-full p-2.5 border border-slate-300 rounded-xl font-mono font-bold text-emerald-700 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
           </div>
-          <div>
+ <div style="display:none">
             <label class="block font-semibold text-slate-700 mb-1">GST Tax Rate %</label>
             <select id="adminProductGst" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
               <option value="5">5% (Mobility / Rehab)</option>
@@ -5016,6 +5026,11 @@ function sha256hex(msg){
             <span><i data-lucide="map-pin" class="w-4 h-4 inline mr-1 text-emerald-600"></i> Check-in Geostamp:</span>
             <span class="font-mono font-bold" id="checkoutGeostampBadge">—</span>
           </div>
+          <div id="checkoutLocRow" class="p-2.5 bg-rose-50 rounded-xl border border-rose-200 text-[11px] text-rose-900 flex items-center justify-between gap-2">
+            <span class="whitespace-nowrap"><i data-lucide="map-pin" class="w-4 h-4 inline mr-1 text-rose-600"></i> Check-out Location:</span>
+            <span class="font-mono font-bold text-right" id="checkoutLocBadge">Locating…</span>
+          </div>
+          <div id="checkoutSavedInfo" class="hidden p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-700"></div>
           <div class="p-2.5 bg-sky-50 rounded-xl border border-sky-200 text-[11px] text-sky-900 flex items-center justify-between">
             <span><i data-lucide="clock" class="w-4 h-4 inline mr-1 text-sky-600"></i> On-Site Dwell Duration:</span>
             <span class="font-mono font-bold" id="checkoutDwellBadge">Calculating live GPS dwell...</span>
@@ -5042,14 +5057,14 @@ function sha256hex(msg){
               <option value="Routine Detailing Complete">Routine Detailing Complete</option>
             </select>
           </div>
-          <div>
+          <div id="checkoutDateWrap">
             <label class="block font-semibold text-slate-700 mb-1">Schedule Next Follow-up Date <span class="text-rose-500">*</span></label>
             <input type="date" id="checkoutNextFollowDate" required class="w-full p-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
           </div>
         </div>
 
         <!-- Follow-up Type Selector (Phone Call vs Offline Meeting) -->
-        <div>
+        <div id="checkoutFollowTypeWrap">
           <label class="block font-semibold text-slate-700 mb-1">Next Follow-up Type <span class="text-rose-500">*</span></label>
           <div class="grid grid-cols-2 gap-3">
             <label class="cursor-pointer border border-slate-200 rounded-xl p-2.5 flex items-center space-x-2 hover:border-emerald-500 has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50">
@@ -5069,14 +5084,14 @@ function sha256hex(msg){
           </div>
         </div>
 
-        <div>
+        <div id="checkoutFollowNoteWrap">
           <label class="block font-semibold text-slate-700 mb-1">Follow-up Objective / Note</label>
           <input type="text" id="checkoutFollowNote" placeholder="e.g. Call to confirm 20-unit BiPAP order & stock delivery timeline" class="w-full p-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
         </div>
 
         <div class="pt-3 flex justify-end space-x-2 border-t border-slate-100">
           <button type="button" onclick="closeModal('checkoutMeetingModal')" class="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50">Cancel</button>
-          <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-semibold shadow-sm">
+          <button type="submit" id="checkoutSubmitBtn" class="px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-semibold shadow-sm">
             Save Notes & Schedule Follow-up
           </button>
         </div>
@@ -5437,12 +5452,8 @@ function sha256hex(msg){
             <span id="liveDiscountLabel">Channel Rebate:</span>
             <span class="font-mono font-bold" id="liveDiscountAmount">-₹0</span>
           </div>
-          <div class="flex justify-between items-center text-slate-600">
-            <span>GST Tax (12% MDR-2017 compliant):</span>
-            <span class="font-mono font-bold text-slate-900" id="liveGstAmount">+₹0</span>
-          </div>
           <div class="flex justify-between items-center text-slate-900 font-bold border-t border-slate-200/80 pt-1.5 text-sm">
-            <span>Total Payable:</span>
+            <span>Order Value (before taxes):</span>
             <span class="font-mono font-extrabold text-emerald-700" id="liveNetTotal">₹0</span>
           </div>
           <div class="pt-1 text-[11px] text-slate-400 font-medium flex items-center justify-between" id="liveQuotaContributionNotice">
@@ -6930,8 +6941,8 @@ function sha256hex(msg){
           <td class="p-2.5 text-slate-500">${esc(item.city)}</td>
           <td class="p-2.5 text-slate-500">${esc(item.rep)}</td>
           <td class="p-2.5 text-right">
-            <button onclick="openDossierModal('${escJs(item.id)}', '${escJs(item.type)}')" class="px-2.5 py-1 text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-semibold border border-blue-200">
-              View 360°
+            <button onclick="${/Order$/.test(String(item.type)) ? `viewOrdersForEntity('${escJs(item.id)}', '${escJs(item.id)}')` : `openDossierModal('${escJs(item.id)}', '${escJs(item.type)}')`}" class="px-2.5 py-1 text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-semibold border border-blue-200">
+              ${/Order$/.test(String(item.type)) ? 'View order' : 'View 360°'}
             </button>
           </td>
         </tr>
@@ -9107,14 +9118,50 @@ function sha256hex(msg){
     }
 
     let activeCheckoutMeeting = null;
+    let activeCheckoutFix = null;
 
     window.openCheckoutMeetingModal = openCheckoutMeetingModal;
     function openCheckoutMeetingModal(id) {
       const m = appState.meetings.find(x => x.id === id);
       if (!m) return;
       activeCheckoutMeeting = m;
+      activeCheckoutFix = null;
+      const editMode = m.status === 'Completed';
+      const showEl = (id, on) => { const n = document.getElementById(id); if (n) n.style.display = on ? '' : 'none'; };
+      ['checkoutDateWrap', 'checkoutFollowTypeWrap', 'checkoutFollowNoteWrap'].forEach(i => showEl(i, !editMode));
+      const dateIn = document.getElementById('checkoutNextFollowDate'); if (dateIn) dateIn.required = !editMode;
+      const savedInfo = document.getElementById('checkoutSavedInfo');
+      const submitBtn = document.getElementById('checkoutSubmitBtn');
+      if (submitBtn) submitBtn.innerText = editMode ? 'Save Changes' : 'Save Notes & Schedule Follow-up';
+      const notesEl = document.getElementById('checkoutNotes'), outEl = document.getElementById('checkoutStageOutcome');
+      if (editMode) {
+        if (notesEl) notesEl.value = m.notes || '';
+        if (outEl && m.outcome) {
+          if (![...outEl.options].some(o => o.value === m.outcome)) outEl.add(new Option(m.outcome, m.outcome));
+          outEl.value = m.outcome;
+        }
+        if (savedInfo) {
+          savedInfo.style.display = '';
+          savedInfo.classList.remove('hidden');
+          savedInfo.innerHTML = '<b>Completed visit.</b> ' + esc(m.checkOutStamp || '') +
+            (m.nextFollowDate ? '<br>Next follow-up: ' + esc(m.nextFollowDate) + ' (' + esc(m.nextFollowType || '') + ')' : '') +
+            (m.notesEditedAt ? '<br><span class="text-slate-400">Notes last edited ' + esc(new Date(m.notesEditedAt).toLocaleString()) + '</span>' : '');
+        }
+        const lb = document.getElementById('checkoutLocBadge');
+        if (lb) lb.innerText = m.checkOutCoords ? (m.checkOutCoords.latitude + '°N, ' + m.checkOutCoords.longitude + '°E (±' + m.checkOutCoords.accuracy + 'm)') : 'Not recorded';
+      } else {
+        if (notesEl) notesEl.value = '';
+        if (savedInfo) { savedInfo.style.display = 'none'; savedInfo.innerHTML = ''; }
+        const lb = document.getElementById('checkoutLocBadge');
+        if (lb) lb.innerText = 'Locating…';
+        acquireAccuratePosition().then(c => {
+          if (activeCheckoutMeeting !== m) return;
+          activeCheckoutFix = c;
+          if (lb) lb.innerText = c.latitude + '°N, ' + c.longitude + '°E (±' + c.accuracy + 'm)';
+        }).catch(err => { if (lb && activeCheckoutMeeting === m) lb.innerText = 'No fix: ' + err.message; });
+      }
       document.getElementById('checkoutMeetingId').value = m.id;
-      document.getElementById('checkoutModalTitle').innerText = `Complete Meeting: ${m.entity}`;
+      document.getElementById('checkoutModalTitle').innerText = (editMode ? 'Meeting Notes: ' : 'Complete Meeting: ') + m.entity;
       document.getElementById('checkoutModalSubtitle').innerText = `${m.purpose} • Assigned to ${m.rep}`;
       document.getElementById('checkoutGeostampBadge').innerText = m.checkInStamp || 'GPS Verified';
       
@@ -9149,6 +9196,16 @@ function sha256hex(msg){
       if (!activeCheckoutMeeting) return;
 
       const m = activeCheckoutMeeting;
+      if (m.status === 'Completed') {
+        m.notes = document.getElementById('checkoutNotes').value.trim();
+        m.outcome = document.getElementById('checkoutStageOutcome').value;
+        m.notesEditedAt = new Date().toISOString();
+        closeModal('checkoutMeetingModal');
+        renderMeetingsTable();
+        if (typeof saveLocalAppState === 'function') saveLocalAppState();
+        showToast('Meeting notes updated.', 'success');
+        return;
+      }
       const now = new Date();
       const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -9159,13 +9216,18 @@ function sha256hex(msg){
         dwellMinutes = Math.max(1, Math.round((now - new Date(m.checkInTime)) / 60000));
       }
 
-      try {
-        checkoutCoords = await acquireAccuratePosition();
-      } catch (err) {
-        console.warn('[GPS Checkout] No GPS fix; completing visit without coordinates:', err.message);
-        checkoutCoords = null;
-        showToast('No GPS fix at check-out. The visit is completed and recorded without a location.', 'warning');
+      if (activeCheckoutFix && (Date.now() - (activeCheckoutFix.timestamp || 0)) < 180000) checkoutCoords = activeCheckoutFix;
+      else {
+        try { checkoutCoords = await acquireAccuratePosition(); }
+        catch (err) {
+          console.warn('[GPS Checkout] No GPS fix:', err.message);
+          const goOn = await appConfirm('Could not get your location for check-out:\n' + err.message + '\n\nComplete this visit WITHOUT a location? (Choose Cancel to retry.)');
+          if (!goOn) return;
+          checkoutCoords = null;
+          showToast('Visit completed without a check-out location.', 'warning');
+        }
       }
+      try { if (checkoutCoords && typeof window.__trailPing === 'function') window.__trailPing({ coords: { latitude: checkoutCoords.latitude, longitude: checkoutCoords.longitude, accuracy: checkoutCoords.accuracy }, timestamp: Date.now() }); } catch (e) {}
 
       m.status = 'Completed';
       const dwellLabel = m.checkInTime ? `Dwell: ${dwellMinutes}m` : 'Dwell: n/a (no check-in)';
@@ -9531,7 +9593,7 @@ function sha256hex(msg){
                   <i data-lucide="shopping-cart" class="w-6 h-6"></i>
                 </div>
                 <h4 class="font-bold text-slate-800 text-sm sm:text-base">No Distribution Orders Recorded</h4>
-                <p class="text-xs text-slate-500 leading-relaxed">Book Primary Orders (Factory &rarr; PD) or Secondary Orders (PD &rarr; SD) with SKU margin calculations and GST invoicing.</p>
+                <p class="text-xs text-slate-500 leading-relaxed">Book Primary Orders (Factory &rarr; PD) or Secondary Orders (PD &rarr; SD) with SKU margin calculations (values are before taxes).</p>
                 <div class="pt-2">
                   <button onclick="openCreateOrderForEntity('', 'PD')" class="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-sm inline-flex items-center gap-1.5 transition-all">
                     <i data-lucide="shopping-bag" class="w-4 h-4"></i> + Book First Order
@@ -13223,7 +13285,6 @@ function sha256hex(msg){
   window.recalculateLiveOrderSummary = function() {
     let grossSubtotal = 0;
     let totalCustomDiscount = 0;
-    let gstAmount = 0;
 
     (activeOrderLineItems || []).forEach(it => {
       const prd = MEDTECH_PRODUCT_CATALOG.find(p => p.id === it.productId) || MEDTECH_PRODUCT_CATALOG[0];
@@ -13234,12 +13295,11 @@ function sha256hex(msg){
         const lineDisc = Math.round((lineGross * discPct) / 100);
         grossSubtotal += lineGross;
         totalCustomDiscount += lineDisc;
-        gstAmount += Math.round(((lineGross - lineDisc) * (prd.gst == null ? 12 : Number(prd.gst))) / 100);   // each product's own GST rate
       }
     });
 
     const taxable = Math.max(0, grossSubtotal - totalCustomDiscount);
-    const netTotal = taxable + gstAmount;
+    const netTotal = taxable;   // sales are tracked before taxes
     const lakhs = (netTotal / 100000).toFixed(2);
 
     const elGross = document.getElementById('liveGrossSubtotal');
@@ -13252,7 +13312,6 @@ function sha256hex(msg){
     if (elGross) elGross.innerText = `₹${grossSubtotal.toLocaleString('en-IN')}`;
     if (elDiscLabel) elDiscLabel.innerText = 'Total SKU Custom Discount:';
     if (elDisc) elDisc.innerText = `-₹${totalCustomDiscount.toLocaleString('en-IN')}`;
-    if (elGst) elGst.innerText = `+₹${gstAmount.toLocaleString('en-IN')}`;
     if (elNet) elNet.innerText = `₹${netTotal.toLocaleString('en-IN')}`;
     if (elLakhs) elLakhs.innerText = `₹${lakhs} L`;
   };
@@ -13370,7 +13429,6 @@ function sha256hex(msg){
 
     let grossSubtotal = 0;
     let totalCustomDiscount = 0;
-    let gstTotal = 0;
     const moqViolations = [];
 
     const items = (activeOrderLineItems || []).map(it => {
@@ -13382,12 +13440,9 @@ function sha256hex(msg){
       const lineDisc = Math.round((lineGross * discPct) / 100);
       const lineNet = lineGross - lineDisc;
 
-      const gstRate = prd.gst == null ? 12 : Number(prd.gst);
-      const lineGst = Math.round((lineNet * gstRate) / 100);
 
       grossSubtotal += lineGross;
       totalCustomDiscount += lineDisc;
-      gstTotal += lineGst;
 
       return {
         productId: prd.id,
@@ -13396,8 +13451,6 @@ function sha256hex(msg){
         price: prd.basePrice,
         discountPct: discPct,
         discountAmount: lineDisc,
-        gstRate: gstRate,
-        gstAmount: lineGst,
         netTotal: lineNet
       };
     });
@@ -13408,8 +13461,7 @@ function sha256hex(msg){
     }
 
     const taxable = Math.max(0, grossSubtotal - totalCustomDiscount);
-    const gstAmount = gstTotal;
-    const netTotal = taxable + gstAmount;
+    const netTotal = taxable;   // sales are tracked before taxes
     const orderLakhs = Math.round((netTotal / 100000) * 10) / 10;
     const assignedRep = document.getElementById('orderRepSelect')?.value || currentRepName();
 
@@ -13432,8 +13484,8 @@ function sha256hex(msg){
       items,
       subtotal: grossSubtotal,
       discountAmount: totalCustomDiscount,
-      gstAmount: gstAmount,
       total: netTotal,
+      preTax: true,
       status: orderStatus,
       rerouted,
       reroutedBy,
@@ -16035,7 +16087,7 @@ function sha256hex(msg){
             '<span class="font-mono font-bold text-emerald-700 text-sm">₹' + inr(p.basePrice) + '</span>' +
             '<button type="button" data-admin-action="quick-price" data-id="' + id + '" class="text-slate-400 hover:text-emerald-600 p-1" title="Quick Edit Price"><i data-lucide="edit-2" class="w-3.5 h-3.5"></i></button>' +
           '</div></td>' +
-          '<td class="p-3.5"><div class="text-[11px] font-mono"><span class="font-bold text-slate-700">' + esc(p.gst == null ? 12 : p.gst) + '% GST</span><span class="text-slate-400 text-[10px] block">HSN: ' + esc(p.hsn || '9019') + '</span></div></td>' +
+          '<td class="p-3.5"><div class="text-[11px] font-mono"><span class="text-slate-400 text-[10px] block">HSN: ' + esc(p.hsn || '9019') + '</span></div></td>' +
           '<td class="p-3.5"><div class="text-[11px]"><span class="font-medium text-slate-700">' + esc(p.warranty || '1 Year') + '</span><span class="text-slate-400 text-[10px] block">MOQ: ' + esc(p.minQty || 1) + ' Units</span></div></td>' +
           '<td class="p-3.5 max-w-[220px]"><p class="text-[11px] text-slate-500 truncate" title="' + esc(specsText) + '">' + esc(specsText || 'Standard medical device specifications.') + '</p></td>' +
           '<td class="p-3.5 text-right"><div class="inline-flex items-center space-x-1">' +
@@ -16204,7 +16256,6 @@ function sha256hex(msg){
       { key: 'doctorTypes', title: 'Doctor specialities', hint: 'Speciality when adding a KOL doctor.', ids: ['kolDoctorType', 'directKolDoctorType'] },
       { key: 'inquiryPriorities', title: 'Inquiry priorities', hint: 'Priority on a customer inquiry. Keep "Urgent" as the saved value of your top level so it stays highlighted red.', ids: ['inqPriority'] },
       { key: 'productCategories', title: 'Product categories', hint: 'Category on a product. Products already saved keep their category value.', ids: ['adminProductCategory', 'adminProductCategoryFilter'] },
-      { key: 'gstRates', title: 'GST rates', hint: 'Saved value must be a number (e.g. 12 | 12% (Respiratory)).', ids: ['adminProductGst'], numeric: true }
     ];
     const listDefaults = {};
     const headRx = /^(all\b|select\b|--)/i;
@@ -17343,7 +17394,7 @@ function sha256hex(msg){
       const lat = Math.round(c.latitude * 1e6) / 1e6, lon = Math.round(c.longitude * 1e6) / 1e6;
       if (lastTrailPoint) {
         const moved = hav(lastTrailPoint[1], lastTrailPoint[2], lat, lon) * 1000;
-        if (moved < 25 && ts - lastTrailPoint[0] < 120000) return;       // stationary: sample every 2 min
+        if (moved < 25 && ts - lastTrailPoint[0] < 60000) return;        // stationary: sample every minute
       }
       const day = localISODate(ts);
       const t = readTrail();
@@ -17362,6 +17413,44 @@ function sha256hex(msg){
       }
     }
 
+    window.__trailPing = recordTrailPoint;
+
+    // ---- Live team locations (RSM / Admin see their ASMs' latest fix) ----
+    function agoLabel(ms) {
+      const m = Math.max(0, Math.round(ms / 60000));
+      if (m < 1) return 'just now';
+      if (m < 60) return m + ' min ago';
+      const h = Math.floor(m / 60);
+      return h + ' h ' + (m % 60) + ' min ago';
+    }
+    window.renderLiveTeam = function () {
+      const box = document.getElementById('liveTeamBody'); if (!box) return;
+      const card = box.parentElement, roleNow = window.CRMAuth && CRMAuth.currentRole && CRMAuth.currentRole();
+      if (card) card.style.display = roleNow === 'ASM' ? 'none' : '';
+      const me = window.CRMAuth && CRMAuth.currentUserId && CRMAuth.currentUserId();
+      const users = (window.CRMScope ? CRMScope.visibleUsers() : []).filter(function (u) { return u && u.id !== me; });
+      const day = todayISO(), now = Date.now();
+      const rows = users.map(function (u) {
+        const pts = trailPointsFor(u.id, day), last = pts[pts.length - 1];
+        const age = last ? now - last[0] : Infinity;
+        return { u: u, last: last, age: age };
+      }).sort(function (a, b) { return a.age - b.age; });
+      if (!rows.length) { box.innerHTML = '<div class="p-3 text-xs text-slate-500">No team members to show.</div>'; return; }
+      box.innerHTML = rows.map(function (r) {
+        const st = !r.last ? ['No location today', 'bg-slate-100 text-slate-600 border-slate-200'] : r.age <= 180000 ? ['Live', 'bg-emerald-100 text-emerald-800 border-emerald-300'] : r.age <= 1800000 ? ['Idle', 'bg-amber-100 text-amber-900 border-amber-300'] : ['Offline', 'bg-rose-50 text-rose-700 border-rose-200'];
+        return '<div class="flex items-center justify-between gap-2 p-2.5 border border-slate-100 rounded-xl hover:bg-slate-50">' +
+          '<div class="min-w-0"><span class="font-bold text-xs text-slate-900 block truncate">' + esc(r.u.name) + '</span>' +
+          '<span class="text-[10px] text-slate-500">' + (r.last ? 'Last seen ' + esc(agoLabel(r.age)) + ' · ' + esc(fmtClock(r.last[0])) + (r.last[3] ? ' · ±' + esc(r.last[3]) + ' m' : '') : 'Has not shared a location yet today') + '</span></div>' +
+          '<div class="flex items-center gap-1.5 flex-shrink-0"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ' + st[1] + '">' + st[0] + '</span>' +
+          (r.last ? '<button type="button" onclick="focusMapOnEvent(' + Number(r.last[1]) + ', ' + Number(r.last[2]) + ')" class="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-bold">Locate</button>' +
+          '<a href="https://www.google.com/maps?q=' + Number(r.last[1]) + ',' + Number(r.last[2]) + '" target="_blank" rel="noopener" class="px-2 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-[10px] font-bold">Maps</a>' : '') + '</div></div>';
+      }).join('');
+    };
+    setInterval(function () {
+      try {
+        if (typeof appState !== 'undefined' && appState.activeTab === 'tracking' && document.visibilityState !== 'hidden') { window.renderLiveTeam(); if (typeof renderTrackingModule === 'function') renderTrackingModule(); }
+      } catch (e) {}
+    }, 20000);
     window.startDutyTracking = function (silent) {
       const u = currentTrackUser();
       if (!u) { if (!silent) showToast('Sign in as an ASM or RSM to track your route.', 'warning'); return; }
@@ -17371,7 +17460,7 @@ function sha256hex(msg){
       dutyWatchId = navigator.geolocation.watchPosition(recordTrailPoint, function (err) {
         if (err && err.code === 1) { stopDutyTracking(true); showToast('Location permission denied. Allow location for this site to record your route.', 'warning'); }
       }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 30000 });
-      try { localStorage.setItem(DUTY_KEY, JSON.stringify({ userId: u.id, on: true, since: Date.now() })); } catch (e) {}
+      try { localStorage.setItem(DUTY_KEY, JSON.stringify({ userId: u.id, on: true, since: Date.now() })); localStorage.removeItem(DUTY_KEY + '_off'); } catch (e) {}
       updateDutyUi();
       if (!silent) showToast('Duty tracking started. Your route is recorded while this app stays open.', 'success');
     };
@@ -17379,6 +17468,7 @@ function sha256hex(msg){
       if (dutyWatchId !== null && navigator.geolocation) navigator.geolocation.clearWatch(dutyWatchId);
       dutyWatchId = null; lastTrailPoint = null;
       try { localStorage.removeItem(DUTY_KEY); } catch (e) {}
+      if (!silent) { const u0 = currentTrackUser(); if (u0) { try { localStorage.setItem(DUTY_KEY + '_off', JSON.stringify({ userId: u0.id, day: localISODate(Date.now()) })); } catch (e) {} } }
       updateDutyUi();
       if (!silent) showToast('Duty tracking stopped.', 'info');
     };
@@ -17397,7 +17487,11 @@ function sha256hex(msg){
     window.resumeDutyIfNeeded = function () {
       let d = null; try { d = JSON.parse(localStorage.getItem(DUTY_KEY) || 'null'); } catch (e) {}
       const u = currentTrackUser();
+      let optOut = null; try { optOut = JSON.parse(localStorage.getItem(DUTY_KEY + '_off') || 'null'); } catch (e) {}
+      const optedOutToday = optOut && u && optOut.userId === u.id && optOut.day === localISODate(Date.now());
+      const isAsm = window.CRMAuth && CRMAuth.currentRole && CRMAuth.currentRole() === 'ASM';
       if (d && d.on && u && d.userId === u.id && dutyWatchId === null) startDutyTracking(true);
+      else if (isAsm && u && !optedOutToday && dutyWatchId === null && !(d && d.on === false)) startDutyTracking(true);   // ASMs are tracked by default while the app is open
       else if (!u && dutyWatchId !== null) stopDutyTracking(true);
       updateDutyUi();
     };
@@ -17419,7 +17513,7 @@ function sha256hex(msg){
           else { const res = await fetch(window.CRM_BACKEND_URL.replace(/\/$/, '') + '/trail', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: u.id, name: u.name, day: day, points: arr.slice(from) }) }); ok = res.ok; }
           if (ok) { const t2 = readTrail(), r2 = t2[u.id] || rec; r2.synced = r2.synced || {}; r2.synced[day] = Math.max(r2.synced[day] || 0, arr.length); t2[u.id] = r2; writeTrail(t2); }
         } catch (e) { /* retried with the next point */ }
-      }, 60000);
+      }, 15000);
     }
 
     // ---- Build visit stops and the route legs between consecutive visits ----
@@ -17503,6 +17597,7 @@ function sha256hex(msg){
       renderTimelineEventList(plan, day, exec);
       renderMapRoute(plan, exec, day);
       computeTrackingMetrics(plan, exec, day);
+      window.renderLiveTeam();
     };
 
     function initTrackingLeafletMap() {
@@ -18769,6 +18864,14 @@ function sha256hex(msg){
     var orig = window.saveLocalAppState;
     if (typeof orig === 'function') window.saveLocalAppState = function () { var r = orig.apply(this, arguments); setTimeout(push, 800); return r; };
   }
+
+  setInterval(async function () {
+    try {
+      if (!active() || cur().role === 'ASM' || !online()) return;
+      if (typeof appState === 'undefined' || appState.activeTab !== 'tracking' || document.visibilityState === 'hidden') return;
+      if (await pullTrails() && typeof window.renderTrackingModule === 'function') window.renderTrackingModule();
+    } catch (e) {}
+  }, 20000);
 
   window.CRMCloud = {
     enabled: true,
