@@ -7298,41 +7298,10 @@ function sha256hex(msg){
           notes: 'Initial warehouse shelf audit, credit agreement dispatch.'
         });
 
-        // Auto-queue Welcome Call
-        appState.calls.unshift({
-          id: uid('CALL-ONB-', 99),
-          entity: newPD.name,
-          type: 'PD',
-          phone: newPD.phone,
-          subject: 'Wholesale Onboarding & Credit Agreement Dispatch',
-          purpose: 'Payment & Stock Check',
-          scheduledTime: 'Tomorrow 15:00',
-          rep: ownerFor(lead),
-          status: 'Scheduled',
-          duration: '',
-          notes: 'Review commercial tier discount structure and logistics dispatch cycles.'
-        });
 
         // Add to Fixed Projections Matrix
         if (typeof FIXED_PROJECTIONS_DATA !== 'undefined') {
-          FIXED_PROJECTIONS_DATA.push({
-            rep: ownerFor(lead),
-            name: `Dealer ${FIXED_PROJECTIONS_DATA.length + 1}: ${newPD.name} (PD)`,
-            dealerId: newPD.id,
-            role: 'Given by RSM',
-            type: 'PD',
-            subtitle: 'Tier-1 Wholesaler',
-            line: 'Full Device Range',
-            state: newPD.state,
-            w1: '12L', w1_act: '0L',
-            w2: '15L', w2_act: '0L',
-            w3: '15L', w3_act: '0L',
-            w4: '12L', w4_act: '0L',
-            w5: '6L', w5_act: '0L',
-            target: '₹60 L',
-            act: '₹0 L',
-            pacing: '0%'
-          });
+          /* projections are added by the ASM/RSM in Dealer projection, not auto-generated */
         }
         renderPDList();
 
@@ -7379,41 +7348,10 @@ function sha256hex(msg){
           notes: 'Set up Evox demo unit counter stand and introduce secondary wholesale ordering.'
         });
 
-        // Auto-queue Introduction Call
-        appState.calls.unshift({
-          id: uid('CALL-ONB-', 99),
-          entity: newSD.name,
-          type: 'SD',
-          phone: newSD.phone,
-          subject: 'Secondary Stockist Onboarding & First Order Discussion',
-          purpose: 'Quotation & Order Commitment',
-          scheduledTime: 'Tomorrow 11:30',
-          rep: ownerFor(lead),
-          status: 'Scheduled',
-          duration: '',
-          notes: 'Connect stockist to regional parent PD for next-day dispatch.'
-        });
 
         // Add to Fixed Projections Matrix
         if (typeof FIXED_PROJECTIONS_DATA !== 'undefined') {
-          FIXED_PROJECTIONS_DATA.push({
-            rep: ownerFor(lead),
-            name: `Dealer ${FIXED_PROJECTIONS_DATA.length + 1}: ${newSD.name} (SD)`,
-            dealerId: newSD.id,
-            role: 'Given by ASM',
-            type: 'SD',
-            subtitle: 'Sub-Dealer Stockist',
-            line: sdProducts.includes('OC') ? 'Oxygen Concentrators (OC)' : 'Evox Device Portfolio',
-            state: newSD.state,
-            w1: '5L', w1_act: '0L',
-            w2: '6L', w2_act: '0L',
-            w3: '6L', w3_act: '0L',
-            w4: '5L', w4_act: '0L',
-            w5: '3L', w5_act: '0L',
-            target: '₹25 L',
-            act: '₹0 L',
-            pacing: '0%'
-          });
+          /* projections are added by the ASM/RSM in Dealer projection, not auto-generated */
         }
         renderSDList();
 
@@ -7468,20 +7406,6 @@ function sha256hex(msg){
           notes: 'Deliver clinical brochures, study trial units, and mask fit sizing gauges.'
         });
 
-        // Auto-queue Clinical Follow-up Call
-        appState.calls.unshift({
-          id: uid('CALL-ONB-', 99),
-          entity: newKOL.name,
-          type: 'KOL',
-          phone: newKOL.phone,
-          subject: 'Patient Trial Protocol & Mask Fit Feedback',
-          purpose: 'Patient Sleep Study Feedback',
-          scheduledTime: 'Tomorrow 17:30',
-          rep: ownerFor(lead),
-          status: 'Scheduled',
-          duration: '',
-          notes: 'Assess clinical patient compliance and device recommendation willingness.'
-        });
         renderKOLList();
       }
 
@@ -7605,37 +7529,9 @@ function sha256hex(msg){
         notes: 'Warehouse space allocation, warranty spare provisioning, and factory credit authorization.'
       });
 
-      // Auto-queue Welcome Call
-      appState.calls.unshift({
-        id: uid('CALL-ONB-', 99),
-        entity: newPD.name,
-        type: 'PD',
-        phone: newPD.phone,
-        subject: 'Primary Dealership Agreement & Credit Terms Dispatch',
-        purpose: 'General Relationship Check',
-        scheduledTime: 'Tomorrow 14:30',
-        rep: p.requestedBy,
-        status: 'Scheduled',
-        duration: '',
-        notes: 'Review 22% tier discount structure and logistics dispatch cycles.'
-      });
 
       // Add to Fixed Projections Matrix
-      FIXED_PROJECTIONS_DATA.push({
-      rep: p.requestedBy,
-        name: `Dealer ${FIXED_PROJECTIONS_DATA.length + 1}: ${newPD.name} (PD)`,
-        role: 'Given by RSM',
-        type: 'PD',
-        line: 'Full Device Range',
-        w1: '15L', w1_act: '0L',
-        w2: '15L', w2_act: '0L',
-        w3: '18L', w3_act: '0L',
-        w4: '18L', w4_act: '0L',
-        w5: '10L', w5_act: '0L',
-        target: '₹76 L',
-        act: '₹0 L',
-        pacing: '0%'
-      });
+      /* projections are added by the ASM/RSM in Dealer projection, not auto-generated */
 
       appState.convertedAudit.unshift({
         id: p.leadId,
@@ -7705,21 +7601,7 @@ function sha256hex(msg){
       });
 
       // Add to Fixed Projections Matrix
-      FIXED_PROJECTIONS_DATA.push({
-      rep: p.requestedBy,
-        name: `Dealer ${FIXED_PROJECTIONS_DATA.length + 1}: ${newSD.name} (SD)`,
-        role: 'Given by ASM',
-        type: 'SD',
-        line: 'Respiratory OC & Rehab',
-        w1: '5L', w1_act: '0L',
-        w2: '5L', w2_act: '0L',
-        w3: '6L', w3_act: '0L',
-        w4: '6L', w4_act: '0L',
-        w5: '3L', w5_act: '0L',
-        target: '₹25 L',
-        act: '₹0 L',
-        pacing: '0%'
-      });
+      /* projections are added by the ASM/RSM in Dealer projection, not auto-generated */
 
       appState.convertedAudit.unshift({
         id: p.leadId,
@@ -9539,11 +9421,37 @@ function sha256hex(msg){
             <button onclick="scheduleMeetingWithTarget('${escJs(c.entity)}', '${escJs(c.type)}')" class="p-1 text-slate-400 hover:text-sky-600 hover:bg-slate-100 rounded" title="Plan In-Person Visit">
               <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i>
             </button>
+            <button onclick="deleteCallRecord('${escJs(c.id)}')" class="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded" title="Delete this call">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
           </td>
         </tr>
       `).join('');
       lucide.createIcons();
     }
+
+    window.deleteCallRecord = async function (id) {
+      const c = (appState.calls || []).find(x => x.id === id);
+      if (!c) return;
+      if (!(await appConfirm('Delete the call "' + (c.subject || c.entity) + '" with ' + c.entity + '? This cannot be undone.'))) return;
+      const i = appState.calls.findIndex(x => x.id === id);
+      if (i > -1) appState.calls.splice(i, 1);
+      if (typeof saveLocalAppState === 'function') saveLocalAppState();
+      filterCallsTable();
+      if (typeof updateBadgesAndCounters === 'function') updateBadgesAndCounters();
+      showToast('Call deleted.', 'info');
+    };
+    window.deleteProjectionRow = async function (name) {
+      const arr = FIXED_PROJECTIONS_DATA;
+      const i = arr.findIndex(p => p.name === name);
+      if (i === -1) return;
+      if (!(await appConfirm('Remove the projection for "' + name + '"? This cannot be undone.'))) return;
+      const j = arr.findIndex(p => p.name === name);
+      if (j > -1) arr.splice(j, 1);
+      if (typeof saveLocalAppState === 'function') saveLocalAppState();
+      window.renderProjectionsTable();
+      showToast('Projection removed.', 'info');
+    };
 
     function filterCallsByType(type, event) {
       activeCallTypeFilter = type;
@@ -10158,7 +10066,8 @@ function sha256hex(msg){
         orderCount = (appState.orders || []).filter(o => {
           const bId = (o.buyerId || '').replace(/^SD:/i, '').trim();
           const bName = (o.buyerName || '').toLowerCase();
-          return bId === cleanEId || (!bId && bName === cleanEName);
+          const soldHere = (o.sellerPdId || '').replace(/^SD:/i, '').trim() === cleanEId;
+          return bId === cleanEId || (!bId && bName === cleanEName) || soldHere;
         }).length;
       } else {
         orderCount = (appState.orders || []).filter(o => {
@@ -10498,12 +10407,14 @@ function sha256hex(msg){
           `;
         } else if (t === 'SD') {
           // Orders for this SD
+          const soldBySd = o => (o.sellerPdId || '').replace(/^SD:/i, '').trim() === cleanEId && (o.type === 'CUSTOMER_VIA_SD' || o.buyerType === 'Customer' || !!o.inquiryId);
           const sdOrders = (appState.orders || []).filter(o => {
             const bId = (o.buyerId || '').replace(/^SD:/i, '').trim();
             const bName = (o.buyerName || '').toLowerCase();
-            return bId === cleanEId || (!bId && bName === cleanEName);
+            return bId === cleanEId || (!bId && bName === cleanEName) || soldBySd(o);
           });
-          const sdTotal = sdOrders.reduce((sum, o) => sum + (o.total || o.subtotal || 0), 0);
+          const sdTotal = sdOrders.filter(o => !soldBySd(o)).reduce((sum, o) => sum + (o.total || o.subtotal || 0), 0);
+          const sdCustTotal = sdOrders.filter(soldBySd).reduce((sum, o) => sum + (o.total || o.subtotal || 0), 0);
 
           content.innerHTML = `
             <div class="space-y-3">
@@ -10512,6 +10423,7 @@ function sha256hex(msg){
                   <span class="text-[10px] font-bold uppercase text-teal-600 block">Total Stockist Wholesale Volume</span>
                   <span class="text-base font-black text-teal-950 font-mono">₹${(sdTotal / 100000).toFixed(1)} L</span>
                   <span class="text-[10px] text-slate-500 block">Parent Depot: <b>${esc(e.parentPd || 'Regional PD Hub')}</b></span>
+                  ${sdCustTotal ? `<span class="text-[10px] text-slate-500 block">Customer sales fulfilled: <b>₹${(sdCustTotal / 100000).toFixed(2)} L</b></span>` : ''}
                 </div>
                 <button type="button" onclick="createOrderFromDossier()" class="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold shadow-xs inline-flex items-center">
                   <i data-lucide="plus" class="w-3.5 h-3.5 mr-1"></i> Book SD Order
@@ -10530,6 +10442,7 @@ function sha256hex(msg){
                       <div class="flex items-center space-x-2">
                         <span class="font-mono font-bold text-xs text-slate-900">${esc(o.id)}</span>
                         <span class="text-[10px] font-semibold text-slate-500 font-mono">Date: ${esc(o.date)}</span>
+                        ${soldBySd(o) ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-100 text-sky-800 border border-sky-200">Customer order: ${esc(o.buyerName)}</span>` : ''}
                       </div>
                       <div class="flex items-center space-x-1.5">
                         ${isHighlighted ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-600 text-white animate-pulse shadow-sm">⚡ Just Bagged</span>` : ''}
@@ -11059,22 +10972,7 @@ function sha256hex(msg){
         appState.pds.unshift(newPD);
 
         // Also add to FIXED_PROJECTIONS_DATA so it appears in Dealer Projections
-        FIXED_PROJECTIONS_DATA.push({
-          name: `Dealer ${FIXED_PROJECTIONS_DATA.length + 1}: ${name} (PD)`,
-          dealerId: newPD.id,
-          role: 'Given by RSM',
-          type: 'PD',
-          subtitle: 'Tier-1 Wholesaler',
-          line: pdProducts.includes('OC') ? 'Oxygen Concentrators (OC)' : 'Full Device Range',
-          state: state,
-          period: appState.projectionMonth || defaultProjectionPeriod(),
-          w1: '12L', w1_product: 'Evox 10L Dual-Flow',
-          w2: '15L', w2_product: 'Evox 5L Medical Grade',
-          w3: '15L', w3_product: 'Evox Auto-BiPAP ST',
-          w4: '12L', w4_product: 'Evox Ergonomic Motorized WC',
-          w5: '6L', w5_product: 'Evox Heavy-Duty Folding WC',
-          target: '₹60 L'
-        });
+        /* projections are added by the ASM/RSM in Dealer projection, not auto-generated */
 
         closeModal('directAddEntityModal');
         const formElem = document.getElementById('directAddEntityForm');
@@ -11110,22 +11008,7 @@ function sha256hex(msg){
         
 
         // Also add to FIXED_PROJECTIONS_DATA so the new SD is immediately available in Dealer projection!
-        FIXED_PROJECTIONS_DATA.push({
-          name: `Dealer ${FIXED_PROJECTIONS_DATA.length + 1}: ${name} (SD)`,
-          dealerId: newSD.id,
-          role: 'Given by ASM',
-          type: 'SD',
-          subtitle: 'Sub-Dealer Stockist',
-          line: sdProducts.includes('OC') ? 'Oxygen Concentrators (OC)' : 'Evox Device Portfolio',
-          state: state,
-          period: appState.projectionMonth || defaultProjectionPeriod(),
-          w1: '4L', w1_product: 'Evox 10L Dual-Flow',
-          w2: '5L', w2_product: 'Evox 5L Medical Grade',
-          w3: '5L', w3_product: 'Evox Auto-BiPAP ST',
-          w4: '4L', w4_product: 'Evox Ergonomic Motorized WC',
-          w5: '2L', w5_product: 'Evox Heavy-Duty Folding WC',
-          target: '₹20 L'
-        });
+        /* projections are added by the ASM/RSM in Dealer projection, not auto-generated */
 
         closeModal('directAddEntityModal');
         const formElem = document.getElementById('directAddEntityForm');
@@ -14112,6 +13995,7 @@ function sha256hex(msg){
             <span class="inline-flex items-center text-[10px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded mt-1 shadow-2xs">
               <i data-lucide="user" class="w-3 h-3 mr-1 text-indigo-500"></i>ASM: ${esc(item.assignedAsm || item.rep || '—')}
             </span>
+            <button type="button" onclick="deleteProjectionRow('${escJs(item.name)}')" class="block text-[10px] text-slate-400 hover:text-rose-600 mt-1 underline">Remove projection</button>
           </td>
 
           <!-- 2. W1 PROJ / ACT (₹ L) -->
