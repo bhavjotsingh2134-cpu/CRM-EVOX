@@ -3675,7 +3675,7 @@ function sha256hex(msg){
         <!-- View switch: matrix vs order pipeline -->
         <div class="flex items-center gap-2">
           <button type="button" id="projViewBtn-matrix" onclick="switchProjView('matrix')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white">Projection Matrix</button>
-          <button type="button" id="projViewBtn-pipeline" onclick="switchProjView('pipeline')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200">Order Pipeline (Repeat &amp; New)</button>
+          <button type="button" id="projViewBtn-pipeline" onclick="switchProjView('pipeline')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200">Order Pipeline (New &amp; Repeat PD/SD)</button>
         </div>
 
         <div id="projPipelineWrap" style="display:none" class="space-y-4"></div>
@@ -18308,10 +18308,10 @@ function sha256hex(msg){
       </div>
       <div id="foNoBox" class="space-y-3">
         <div>
-          <label class="block font-semibold text-slate-700 mb-1">Expected date of first order</label>
+          <label class="block font-semibold text-slate-700 mb-1">Expected date of first order <span class="font-normal text-slate-400">(optional)</span></label>
           <input type="date" id="foExpDate" class="w-full p-2.5 border border-slate-300 rounded-xl">
         </div>
-        <p class="text-[11px] text-slate-500">It goes into the New PD/SD order pipeline as an order projection for that week.</p>
+        <p class="text-[11px] text-slate-500">Leave the date empty if you don't know it yet. The order stays in the open pipeline (New PD / New SD) until it is bagged.</p>
       </div>
       <div>
         <label class="block font-semibold text-slate-700 mb-1"><span id="foProdLabel">Which products will they take?</span></label>
@@ -18466,69 +18466,79 @@ function sha256hex(msg){
     WK.forEach(function (w) { ((plan && plan[w]) || []).forEach(function (x) { agg[x.p] = (agg[x.p] || 0) + x.q; }); });
     return Object.keys(agg).map(function (k) { return agg[k] + '× ' + nameOfProductKey(k); }).join(', ');
   }
+  window.__projSeg = 'all';
+  window.setProjSeg = function (v) { window.__projSeg = v; window.renderProjPipeline(); };
   window.renderProjPipeline = function () {
     var wrap = document.getElementById('projPipelineWrap'); if (!wrap || wrap.style.display === 'none') return;
     var A = window.appState, period = A.projectionMonth || defaultProjectionPeriod(), parts = period.split(' '), mName = parts[0], yStr = parts[1];
-    var mNum = MONTHS[mName.toLowerCase()], yNum = parseInt(yStr, 10), periodStart = yNum * 10000 + mNum * 100 + 1;
-    var f = A.globalStateFilter || 'All';
-    var dateKey = function (o) { var p = String(o.date || '').split('-'); return p.length < 3 ? 0 : (+p[0]) * 10000 + (+p[1]) * 100 + (+p[2]); };
+    var mNum = MONTHS[mName.toLowerCase()], yNum = parseInt(yStr, 10);
+    var f = A.globalStateFilter || 'All', seg = window.__projSeg || 'all';
     var projs = window.FIXED_PROJECTIONS_DATA.filter(function (p) { return (p.period || defaultProjectionPeriod()) === period; });
     var cn = function (x) { return cleanDealerName(x || '').toLowerCase(); };
     var dealers = [];
-    (A.pds || []).forEach(function (d) { dealers.push({ id: d.id, name: d.name, type: 'PD', state: d.state, city: d.city, asm: d.assignedAsm || d.rep || '', since: d.onboardedOn || d.createdAt || d.date || '' }); });
-    (A.sds || []).forEach(function (d) { dealers.push({ id: d.id, name: d.name, type: 'SD', state: d.state, city: d.city, asm: d.assignedAsm || d.rep || '', since: d.onboardedOn || d.createdAt || d.date || '' }); });
-    projs.forEach(function (p) { if (!dealers.some(function (d) { return (p.dealerId && d.id === p.dealerId) || cn(d.name) === cn(p.name); })) dealers.push({ id: p.dealerId || null, name: cn(p.name), type: p.type, state: p.state, asm: p.assignedAsm || p.rep || '', since: '' }); });
-    var rep = [], neu = [], noProj = [];
+    ['pds', 'sds'].forEach(function (k) { (A[k] || []).forEach(function (d) { dealers.push({ e: d, id: d.id, name: d.name, type: k === 'pds' ? 'PD' : 'SD', state: d.state, city: d.city, asm: d.assignedAsm || d.rep || '' }); }); });
+    projs.forEach(function (p) { if (!dealers.some(function (d) { return (p.dealerId && d.id === p.dealerId) || cn(d.name) === cn(p.name); })) dealers.push({ e: null, id: p.dealerId || null, name: cn(p.name), type: p.type, state: p.state, asm: p.assignedAsm || p.rep || '' }); });
+    var G = { newPD: [], newSD: [], repPD: [], repSD: [] };
     dealers.forEach(function (d) {
       if (!stateOk(d.state, f)) return;
       var pr = projs.filter(function (p) { return (p.dealerId && p.dealerId === d.id) || cn(p.name) === cn(d.name); })[0] || null;
-      var all = dealerOrdersAll(d);
-      var before = all.filter(function (o) { return dateKey(o) && dateKey(o) < periodStart; });
-      var act = window.getDealerOrdersActuals(d.id, d.name, mName, yStr);
+      var all = dealerOrdersAll(d), act = window.getDealerOrdersActuals(d.id, d.name, mName, yStr);
       var projL = pr ? WK.reduce(function (a, w) { return a + parseProjectionNum(pr[w]); }, 0) : 0;
-      var row = { d: d, pr: pr, projL: projL, actL: act.totalLakhs, act: act, firstOrder: all.length ? all.map(function (o) { return o.date; }).sort()[0] : '', prods: pr ? productsOfPlan(pr.plan) || (pr.line || '') : '' };
-      if (before.length) rep.push(row);
-      else if (pr || act.orderCount) neu.push(row);
-      else noProj.push(row);
+      var row = { d: d, pr: pr, projL: projL, actL: act.totalLakhs, act: act, nOrders: all.length, last: all.map(function (o) { return o.date || ''; }).sort().pop() || '', first: all.map(function (o) { return o.date || ''; }).sort()[0] || '' };
+      if (all.length) { row.prods = pr ? (productsOfPlan(pr.plan) || pr.line || '') : ''; G[d.type === 'PD' ? 'repPD' : 'repSD'].push(row); }
+      else {
+        var plan = d.e && d.e.firstOrderPlan;
+        row.planned = !!(plan && plan.length) || !!pr;
+        row.val = plan && plan.length ? weekLakhs(plan) : projL;
+        row.prods = plan && plan.length ? plan.map(function (x) { return x.q + '× ' + nameOfProductKey(x.p); }).join(', ') : (pr ? productsOfPlan(pr.plan) || pr.line || '' : '');
+        row.exp = (d.e && d.e.firstOrderExpected) || '';
+        G[d.type === 'PD' ? 'newPD' : 'newSD'].push(row);
+      }
     });
-    var sum = function (arr, k) { return arr.reduce(function (a, r) { return a + r[k]; }, 0); };
-    var tile = function (t, v, sub, cls) { return '<div class="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-xs"><span class="text-[10px] font-bold uppercase text-slate-500">' + t + '</span><div class="text-xl font-bold mt-1 ' + cls + '">' + v + '</div><span class="text-[11px] text-slate-500">' + sub + '</span></div>'; };
-    var converted = neu.filter(function (r) { return r.act.orderCount > 0; }).length;
-    var wkLabel = function (pr) { if (!pr) return '—'; for (var i = 0; i < 5; i++) if (parseProjectionNum(pr[WK[i]]) > 0) return 'Week ' + (i + 1); return '—'; };
-    var editBtn = function (r) {
-      if (!r.pr) return '<button type="button" onclick="projectForDealer(\'' + escJs(r.d.name) + '\',\'' + r.d.type + '\')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold">+ Add projection</button>';
-      var i = window.FIXED_PROJECTIONS_DATA.indexOf(r.pr);
-      return '<button type="button" onclick="triggerEditDealerProjection(' + i + ')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-[11px] font-bold">Edit projection</button>';
-    };
+    var sum = function (arr, k) { return arr.reduce(function (a, r) { return a + (r[k] || 0); }, 0); };
+    var closed = function (arr) { return arr.filter(function (r) { var d = r.first || ''; return d.indexOf(yStr + '-' + ('0' + mNum).slice(-2)) === 0; }); };
+    var chip = function (k, label, n) { var on = seg === k; return '<button type="button" onclick="setProjSeg(\'' + k + '\')" class="px-3 py-1.5 rounded-full text-[11px] font-bold border ' + (on ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50') + '">' + label + ' (' + n + ')</button>'; };
+    var tile = function (t, big, sub, cls, k) { return '<button type="button" onclick="setProjSeg(\'' + k + '\')" class="text-left bg-white rounded-2xl border ' + (seg === k ? 'border-slate-900' : 'border-slate-200') + ' p-3.5 shadow-xs hover:bg-slate-50"><span class="text-[10px] font-bold uppercase text-slate-500">' + t + '</span><div class="text-xl font-bold mt-1 ' + cls + '">' + big + '</div><span class="text-[11px] text-slate-500">' + sub + '</span></button>'; };
     var typeBadge = function (t) { return '<span class="px-2 py-0.5 rounded text-[10px] font-bold ' + (t === 'PD' ? 'bg-indigo-100 text-indigo-700' : 'bg-teal-100 text-teal-700') + '">' + esc(t) + '</span>'; };
     var th = function (c) { return '<th class="p-2.5">' + c + '</th>'; };
-    var repRows = rep.length ? rep.map(function (r) {
-      var pend = Math.max(0, r.projL - r.actL), pace = r.projL ? Math.round(r.actL / r.projL * 100) : 0;
-      return '<tr class="hover:bg-slate-50"><td class="p-2.5 font-bold text-slate-900">' + esc(r.d.name) + '<span class="block text-[10px] text-slate-400 font-medium">' + esc([r.d.city, r.d.state].filter(Boolean).join(', ')) + '</span></td><td class="p-2.5">' + typeBadge(r.d.type) + '</td><td class="p-2.5 text-slate-600">' + esc(r.d.asm || '—') + '</td>' +
-        '<td class="p-2.5 text-[11px] text-slate-600 max-w-[220px]">' + esc(r.prods || (r.pr ? '' : 'No projection yet')) + '</td>' +
-        '<td class="p-2.5 font-mono font-bold text-center">₹' + L1(r.projL) + ' L</td><td class="p-2.5 font-mono font-bold text-center text-emerald-600">₹' + L1(r.actL) + ' L</td><td class="p-2.5 font-mono font-bold text-center text-amber-700">₹' + L1(pend) + ' L</td>' +
-        '<td class="p-2.5 text-center"><span class="px-2 py-0.5 rounded text-[11px] font-bold ' + (pace >= 50 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800') + '">' + (r.projL ? pace + '%' : '—') + '</span></td>' +
-        '<td class="p-2.5 text-right whitespace-nowrap">' + editBtn(r) + ' <button type="button" onclick="openCreateOrderForEntity(\'' + escJs(r.d.name) + '\',\'' + r.d.type + '\')" class="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-[11px] font-bold">+ Order</button></td></tr>';
-    }).join('') : '<tr><td colspan="9" class="p-6 text-center text-slate-400">No repeat dealers yet. A PD/SD appears here after the company has bagged an order from them.</td></tr>';
-    var neuAll = neu.concat(noProj);
-    var neuRows = neuAll.length ? neuAll.map(function (r) {
-      var status = r.act.orderCount ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">First order bagged ✓ ₹' + L1(r.actL) + ' L</span>' : r.pr ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">Awaiting first order</span>' : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">Not projected yet</span>';
-      return '<tr class="hover:bg-slate-50"><td class="p-2.5 font-bold text-slate-900">' + esc(r.d.name) + '<span class="block text-[10px] text-slate-400 font-medium">' + esc([r.d.city, r.d.state].filter(Boolean).join(', ')) + '</span></td><td class="p-2.5">' + typeBadge(r.d.type) + '</td><td class="p-2.5 text-slate-600">' + esc(r.d.asm || '—') + '</td>' +
-        '<td class="p-2.5 text-center text-slate-700 font-semibold">' + esc(wkLabel(r.pr)) + '</td><td class="p-2.5 text-[11px] text-slate-600 max-w-[220px]">' + esc(r.prods || '—') + '</td>' +
-        '<td class="p-2.5 font-mono font-bold text-center">' + (r.pr ? '₹' + L1(r.projL) + ' L' : '—') + '</td><td class="p-2.5">' + status + '</td><td class="p-2.5 text-right whitespace-nowrap">' + editBtn(r) + '</td></tr>';
-    }).join('') : '<tr><td colspan="8" class="p-6 text-center text-slate-400">No new PD/SD waiting for a first order.</td></tr>';
     var tbl = function (head, body) { return '<div class="overflow-x-auto border border-slate-200 rounded-xl"><table class="w-full text-xs text-left min-w-[760px]"><thead class="bg-slate-50 text-slate-500 uppercase text-[10px]"><tr>' + head.map(th).join('') + '</tr></thead><tbody class="divide-y divide-slate-100">' + body + '</tbody></table></div>'; };
+    var nameCell = function (r) { return '<td class="p-2.5 font-bold text-slate-900">' + esc(r.d.name) + '<span class="block text-[10px] text-slate-400 font-medium">' + esc([r.d.city, r.d.state].filter(Boolean).join(', ')) + '</span></td>'; };
+    var section = function (title, sub, head, body) { return '<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2.5"><div><h3 class="text-sm font-bold text-slate-900">' + title + '</h3><p class="text-xs text-slate-500">' + sub + '</p></div>' + tbl(head, body) + '</div>'; };
+    var repSection = function (key, type) {
+      var arr = G[key], body = arr.length ? arr.map(function (r) {
+        var pend = Math.max(0, r.projL - r.actL), pace = r.projL ? Math.round(r.actL / r.projL * 100) : 0, i = r.pr ? window.FIXED_PROJECTIONS_DATA.indexOf(r.pr) : -1;
+        var edit = r.pr ? '<button type="button" onclick="triggerEditDealerProjection(' + i + ')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-[11px] font-bold">Edit projection</button>' : '<button type="button" onclick="projectForDealer(\'' + escJs(r.d.name) + '\',\'' + r.d.type + '\')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold">+ Add projection</button>';
+        return '<tr class="hover:bg-slate-50">' + nameCell(r) + '<td class="p-2.5 text-slate-600">' + esc(r.d.asm || '—') + '</td><td class="p-2.5 text-[11px] text-slate-600 max-w-[220px]">' + esc(r.prods || (r.pr ? '' : 'No projection yet')) + '</td>' +
+          '<td class="p-2.5 font-mono font-bold text-center">₹' + L1(r.projL) + ' L</td><td class="p-2.5 font-mono font-bold text-center text-emerald-600">₹' + L1(r.actL) + ' L</td><td class="p-2.5 font-mono font-bold text-center text-amber-700">₹' + L1(pend) + ' L</td>' +
+          '<td class="p-2.5 text-center"><span class="px-2 py-0.5 rounded text-[11px] font-bold ' + (pace >= 50 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800') + '">' + (r.projL ? pace + '%' : '—') + '</span></td>' +
+          '<td class="p-2.5 text-[11px] text-slate-500">' + esc(r.nOrders) + ' order' + (r.nOrders === 1 ? '' : 's') + (r.last ? '<br>last ' + esc(r.last) : '') + '</td>' +
+          '<td class="p-2.5 text-right whitespace-nowrap">' + edit + ' <button type="button" onclick="openCreateOrderForEntity(\'' + escJs(r.d.name) + '\',\'' + r.d.type + '\')" class="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-[11px] font-bold">+ Order</button></td></tr>';
+      }).join('') : '<tr><td colspan="9" class="p-6 text-center text-slate-400">No repeat ' + type + ' yet. A dealer moves here after its first order is bagged.</td></tr>';
+      return section('Repeat ' + type + ' — already ordering', 'Projection vs orders bagged in ' + esc(period) + '. Pending = projected minus bagged.', ['Dealer', 'ASM', 'Products expected', 'Projected', 'Bagged', 'Pending', 'Pacing', 'History', 'Action'], body);
+    };
+    var newSection = function (key, type) {
+      var arr = G[key], body = arr.length ? arr.map(function (r) {
+        var st = r.planned ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">Open pipeline</span>' : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">Not planned yet</span>';
+        var btns = r.d.e ? '<button type="button" onclick="askFirstOrder(\'' + escJs(r.d.id) + '\',\'' + r.d.type + '\')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-[11px] font-bold">' + (r.planned ? 'Edit plan' : '+ Plan products') + '</button> <button type="button" onclick="askFirstOrder(\'' + escJs(r.d.id) + '\',\'' + r.d.type + '\',\'yes\')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold">Order bagged</button>' : '';
+        return '<tr class="hover:bg-slate-50">' + nameCell(r) + '<td class="p-2.5 text-slate-600">' + esc(r.d.asm || '—') + '</td><td class="p-2.5 text-[11px] text-slate-600 max-w-[240px]">' + esc(r.prods || '—') + '</td>' +
+          '<td class="p-2.5 font-mono font-bold text-center">' + (r.planned ? '₹' + (Math.round(r.val * 100) / 100) + ' L' : '—') + '</td><td class="p-2.5 text-center text-slate-600">' + (r.exp ? esc(r.exp) : '<span class="text-slate-400">No date</span>') + '</td><td class="p-2.5">' + st + '</td><td class="p-2.5 text-right whitespace-nowrap">' + btns + '</td></tr>';
+      }).join('') : '<tr><td colspan="7" class="p-6 text-center text-slate-400">No new ' + type + ' waiting for a first order.</td></tr>';
+      return section('New ' + type + ' — not ordered yet', 'Open pipeline of first orders you can still close. Value is at list price, before taxes. No date needed.', ['Dealer', 'ASM', 'Products expected', 'Pipeline value', 'Expected date', 'Status', 'Action'], body);
+    };
+    var nVal = function (k) { return sum(G[k], 'val'); };
+    var openTotal = nVal('newPD') + nVal('newSD');
+    var show = function (k) { return seg === 'all' || seg === k; };
     wrap.innerHTML =
+      '<div class="flex items-center justify-between flex-wrap gap-2"><div class="text-xs text-slate-600">Open first-order pipeline: <b class="text-indigo-700 text-sm">₹' + (Math.round(openTotal * 100) / 100) + ' L</b> across ' + (G.newPD.length + G.newSD.length) + ' new dealers</div>' +
+      '<div class="flex flex-wrap gap-1.5">' + chip('all', 'All', dealers.filter(function (d) { return stateOk(d.state, f); }).length) + chip('newPD', 'New PD', G.newPD.length) + chip('newSD', 'New SD', G.newSD.length) + chip('repPD', 'Repeat PD', G.repPD.length) + chip('repSD', 'Repeat SD', G.repSD.length) + '</div></div>' +
       '<div class="grid grid-cols-2 lg:grid-cols-4 gap-3">' +
-        tile('Repeat dealers · projected', '₹' + L1(sum(rep, 'projL')) + ' L', rep.length + ' PD/SD already ordering', 'text-slate-900') +
-        tile('Repeat dealers · bagged', '₹' + L1(sum(rep, 'actL')) + ' L', 'pending ₹' + L1(Math.max(0, sum(rep, 'projL') - sum(rep, 'actL'))) + ' L', 'text-emerald-600') +
-        tile('New PD/SD · expected first orders', '₹' + L1(sum(neuAll, 'projL')) + ' L', neuAll.length + ' not yet ordering before ' + esc(mName), 'text-indigo-700') +
-        tile('New PD/SD · converted', converted + ' of ' + neuAll.length, 'first order bagged in ' + esc(period), 'text-amber-700') +
+        tile('New PD · open pipeline', '₹' + (Math.round(nVal('newPD') * 100) / 100) + ' L', G.newPD.length + ' PD waiting for first order', 'text-indigo-700', 'newPD') +
+        tile('New SD · open pipeline', '₹' + (Math.round(nVal('newSD') * 100) / 100) + ' L', G.newSD.length + ' SD waiting for first order', 'text-teal-700', 'newSD') +
+        tile('Repeat PD · bagged / projected', '₹' + L1(sum(G.repPD, 'actL')) + ' / ' + L1(sum(G.repPD, 'projL')) + ' L', G.repPD.length + ' PD ordering · ' + esc(period), 'text-slate-900', 'repPD') +
+        tile('Repeat SD · bagged / projected', '₹' + L1(sum(G.repSD, 'actL')) + ' / ' + L1(sum(G.repSD, 'projL')) + ' L', G.repSD.length + ' SD ordering · ' + esc(period), 'text-slate-900', 'repSD') +
       '</div>' +
-      '<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2.5"><div><h3 class="text-sm font-bold text-slate-900">Repeat orders — dealers already working with the company</h3><p class="text-xs text-slate-500">Projection vs orders bagged in ' + esc(period) + '. Pending = projected minus bagged.</p></div>' +
-        tbl(['Dealer', 'Type', 'ASM', 'Products expected', 'Projected', 'Bagged', 'Pending', 'Pacing', 'Action'], repRows) + '</div>' +
-      '<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2.5"><div><h3 class="text-sm font-bold text-slate-900">New PD/SD — not started working with the company yet</h3><p class="text-xs text-slate-500">Order projection for first orders. A dealer moves to Repeat after its first order is bagged.</p></div>' +
-        tbl(['Dealer', 'Type', 'ASM', 'Expected first order', 'Products expected', 'Expected value', 'Status', 'Action'], neuRows) + '</div>';
+      (show('newPD') ? newSection('newPD', 'PD') : '') + (show('newSD') ? newSection('newSD', 'SD') : '') +
+      (show('repPD') ? repSection('repPD', 'PD') : '') + (show('repSD') ? repSection('repSD', 'SD') : '');
     if (window.lucide) lucide.createIcons();
   };
 
@@ -18559,7 +18569,7 @@ function sha256hex(msg){
     document.getElementById('foNoBox').style.display = y ? 'none' : '';
     document.getElementById('foProdLabel').innerText = y ? 'Products in the first order (optional)' : 'Which products will they take?';
   };
-  window.askFirstOrder = function (id, type) {
+  window.askFirstOrder = function (id, type, mode) {
     var e = (type === 'PD' ? window.appState.pds : window.appState.sds).filter(function (x) { return x.id === id; })[0];
     if (!e) return;
     fo.rows = [];
@@ -18568,9 +18578,11 @@ function sha256hex(msg){
     var b = document.getElementById('foTypeBadge'); b.innerText = type;
     document.querySelector('input[name="foDone"][value="no"]').checked = true;
     document.getElementById('foDate').value = todayStr(); document.getElementById('foDate').max = todayStr();
-    document.getElementById('foExpDate').value = addDays(7); document.getElementById('foExpDate').min = todayStr();
+    document.getElementById('foExpDate').value = e.firstOrderExpected || ''; document.getElementById('foExpDate').min = todayStr();
     document.getElementById('foValue').value = '';
-    foRender(); foToggle(); openModal('firstOrderModal');
+    if (e.firstOrderDone === false && e.firstOrderPlan) fo.rows = e.firstOrderPlan.map(function (x) { return { p: x.p, q: x.q }; });
+    if (mode === 'yes') { document.querySelector('input[name="foDone"][value="yes"]').checked = true; foSyncValue(); }
+    foRender(); foToggle(); foSyncValue(); openModal('firstOrderModal');
   };
   window.saveFirstOrder = function (ev) {
     ev.preventDefault();
@@ -18595,25 +18607,22 @@ function sha256hex(msg){
       showToast('First order of ₹' + value.toLocaleString('en-IN') + ' recorded for ' + e.name + '.', 'success');
     } else {
       var exp = document.getElementById('foExpDate').value;
-      if (!exp) { showToast('Enter the expected date of the first order.', 'warning'); return; }
       if (!rows.length) { showToast('Add at least one product they are expected to take.', 'warning'); return; }
-      var dt = new Date(exp + 'T00:00:00'), MN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-      var period = MN[dt.getMonth()] + ' ' + dt.getFullYear(), wk = weekOf(dt.getDate());
-      var lakhs = Math.round(weekLakhs(rows) * 100) / 100;
       var key = function (n) { return cleanDealerName(n || '').toLowerCase(); };
-      var row = window.FIXED_PROJECTIONS_DATA.filter(function (p) { return (p.period || defaultProjectionPeriod()) === period && ((p.dealerId && p.dealerId === e.id) || key(p.name) === key(e.name)); })[0];
-      if (!row) {
-        window.FIXED_PROJECTIONS_DATA.push({ name: 'Dealer ' + (window.FIXED_PROJECTIONS_DATA.length + 1) + ': ' + e.name + ' (' + type + ')', dealerId: e.id, role: type === 'PD' ? 'Given by RSM' : 'Given by ASM', type: type,
+      var FP = window.FIXED_PROJECTIONS_DATA;
+      for (var k = FP.length - 1; k >= 0; k--) { var q = FP[k]; if (q && q.newDealerFirstOrder && ((q.dealerId && q.dealerId === e.id) || key(q.name) === key(e.name))) FP.splice(k, 1); }   // replace the earlier plan
+      var summary = rows.map(function (r) { return r.q + '× ' + shortName(prod(r.p)); }).join(', ');
+      e.firstOrderDone = false; e.firstOrderPlan = rows.map(function (r) { return { p: r.p, q: r.q }; }); e.firstOrderProducts = summary; e.firstOrderExpected = exp || '';
+      if (exp) {
+        var dt = new Date(exp + 'T00:00:00'), MN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        var period = MN[dt.getMonth()] + ' ' + dt.getFullYear(), wk = weekOf(dt.getDate()), lakhs = Math.round(weekLakhs(rows) * 100) / 100;
+        var row = { name: 'Dealer ' + (FP.length + 1) + ': ' + e.name + ' (' + type + ')', dealerId: e.id, role: type === 'PD' ? 'Given by RSM' : 'Given by ASM', type: type,
           subtitle: type === 'PD' ? 'Tier-1 Wholesaler' : 'Sub-Dealer Stockist', line: 'Full Device Range', state: e.state || 'Pan-India', period: period, assignedAsm: rep, rep: rep,
-          w1: '0L', w2: '0L', w3: '0L', w4: '0L', w5: '0L', target: '₹0 L', newDealerFirstOrder: true });
-        row = window.FIXED_PROJECTIONS_DATA[window.FIXED_PROJECTIONS_DATA.length - 1];
-      }
-      var plan = row.plan || {}; plan[wk] = (plan[wk] || []).concat(rows.map(function (r) { return { p: r.p, q: r.q }; })); row.plan = plan;
-      var all = plan[wk]; row[wk] = (Math.round(weekLakhs(all) * 100) / 100) + 'L';
-      row[wk + '_product'] = all.map(function (x) { return x.q + '× ' + shortName(prod(x.p)); }).join(', ');
-      row.target = '₹' + WK.reduce(function (a, w) { return a + parseFloat(String(row[w] || '0').replace(/[^0-9.]/g, '') || 0); }, 0).toFixed(1) + ' L';
-      e.firstOrderDone = false; e.firstOrderExpected = exp; e.firstOrderProducts = rows.map(function (r) { return r.q + '× ' + shortName(prod(r.p)); }).join(', ');
-      showToast('Saved: ' + e.name + ' is in the New PD/SD pipeline for ' + period + ' (week ' + wk.slice(1) + ').', 'success');
+          w1: '0L', w2: '0L', w3: '0L', w4: '0L', w5: '0L', target: '₹' + lakhs.toFixed(1) + ' L', newDealerFirstOrder: true };
+        row[wk] = lakhs + 'L'; row[wk + '_product'] = summary; row.plan = {}; row.plan[wk] = rows.map(function (r) { return { p: r.p, q: r.q }; });
+        FP.push(row);
+        showToast('Saved: ' + e.name + ' is in the New ' + type + ' pipeline, expected ' + exp + '.', 'success');
+      } else showToast('Saved: ' + e.name + ' is in the open New ' + type + ' pipeline (no date).', 'success');
     }
     closeModal('firstOrderModal');
     ['renderOrdersTable', 'renderProjectionsTable', 'renderPDList', 'renderSDList', 'renderDashboard', 'updateBadgesAndCounters'].forEach(function (f) { try { if (typeof window[f] === 'function') window[f](); } catch (x) {} });
