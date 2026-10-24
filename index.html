@@ -3672,8 +3672,16 @@ function sha256hex(msg){
           </div>
         </div>
 
+        <!-- View switch: matrix vs order pipeline -->
+        <div class="flex items-center gap-2">
+          <button type="button" id="projViewBtn-matrix" onclick="switchProjView('matrix')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white">Projection Matrix</button>
+          <button type="button" id="projViewBtn-pipeline" onclick="switchProjView('pipeline')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200">Order Pipeline (Repeat &amp; New)</button>
+        </div>
+
+        <div id="projPipelineWrap" style="display:none" class="space-y-4"></div>
+
         <!-- Multi-Dealer Matrix Table Card exactly matching Image 2 -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-4 sm:p-5">
+        <div id="projMatrixCard" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-4 sm:p-5">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-3 border-b border-slate-100 gap-2">
             <div>
               <h3 class="text-sm font-bold text-slate-900" id="projMatrixHeading">Consolidated Multi-Dealer Projection Matrix</h3>
@@ -12398,6 +12406,7 @@ function sha256hex(msg){
       existing.w3_product = focus;
       existing.w4_product = focus;
       existing.w5_product = focus;
+      if (window.projPlanApply) window.projPlanApply('add', existing);
       existing.target = `₹${total.toFixed(0)} L`;
       existing.line = focus;
       if (state !== 'All') existing.state = state;
@@ -12428,6 +12437,7 @@ function sha256hex(msg){
         w5: `${w5}L`, w5_product: focus,
         target: `₹${total.toFixed(0)} L`
       });
+      if (window.projPlanApply) window.projPlanApply('add', FIXED_PROJECTIONS_DATA[FIXED_PROJECTIONS_DATA.length - 1]);
     }
 
     // Set count select to All so newly added dealer is immediately visible!
@@ -13168,6 +13178,17 @@ function sha256hex(msg){
     (activeOrderLineItems || []).forEach(it => { if (!it.discountEdited) it.discountPct = policyDiscountPct(); });
   };
 
+  // Discount per line: either a percentage or a flat rupee amount off that line
+  window.lineDiscountCalc = function (it, gross) {
+    gross = Number(gross) || 0;
+    if (it && it.discountMode === 'flat') {
+      const d = Math.min(gross, Math.max(0, Math.round(parseFloat(it.discountFlat) || 0)));
+      return { disc: d, pct: gross ? (d / gross) * 100 : 0, mode: 'flat' };
+    }
+    const pct = Math.min(100, Math.max(0, parseFloat(it && it.discountPct) || 0));
+    return { disc: Math.round((gross * pct) / 100), pct: pct, mode: 'pct' };
+  };
+
   // 4. SKU LINE ITEMS WITH CUSTOM DISCOUNT PER SKU
   window.renderOrderLineItems = function() {
     const container = document.getElementById('orderLineItemsContainer');
@@ -13182,15 +13203,14 @@ function sha256hex(msg){
         <div class="hidden sm:grid sm:grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase px-1">
           <div class="col-span-5">Medical Device SKU (Catalog Price)</div>
           <div class="col-span-2 text-center">Qty</div>
-          <div class="col-span-2 text-center">Custom Disc %</div>
+          <div class="col-span-2 text-center">Discount (% or ₹)</div>
           <div class="col-span-3 text-right pr-2">Line Total (Net)</div>
         </div>
         ${activeOrderLineItems.map((item, idx) => {
           const prd = MEDTECH_PRODUCT_CATALOG.find(p => p.id === item.productId) || MEDTECH_PRODUCT_CATALOG[0];
           const qty = parseInt(item.qty, 10) || 1;
           const lineGross = prd.basePrice * qty;
-          const discPct = Math.min(100, Math.max(0, parseFloat(item.discountPct) || 0));
-          const lineDisc = Math.round((lineGross * discPct) / 100);
+          const _ld = lineDiscountCalc(item, lineGross); const discPct = _ld.pct; const lineDisc = _ld.disc;
           const lineNet = lineGross - lineDisc;
 
           return `
@@ -13213,12 +13233,15 @@ function sha256hex(msg){
                 <input type="number" min="1" value="${esc(item.qty)}" onchange="updateLineItemField(${idx}, 'qty', this.value)" oninput="updateLineItemField(${idx}, 'qty', this.value)" class="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-center text-slate-900" placeholder="Qty">
               </div>
 
-              <!-- Custom Discount % Input -->
+              <!-- Discount: % or flat rupees -->
               <div class="w-full sm:col-span-2">
-                <span class="sm:hidden block text-[10px] font-bold text-slate-500 mb-0.5">Custom Discount %</span>
+                <span class="sm:hidden block text-[10px] font-bold text-slate-500 mb-0.5">Discount</span>
                 <div class="flex items-center">
-                  <input type="number" min="0" max="100" step="0.5" value="${esc(item.discountPct !== undefined ? item.discountPct : 0)}" onchange="updateLineItemField(${idx}, 'discountPct', this.value)" oninput="updateLineItemField(${idx}, 'discountPct', this.value)" class="w-full p-2 border border-r-0 border-slate-300 rounded-l-lg text-xs font-mono font-bold text-center text-slate-900 bg-white" placeholder="0">
-                  <span class="px-2 py-2 bg-slate-200 text-slate-700 text-xs font-bold rounded-r-lg border border-slate-300">%</span>
+                  <select onchange="updateLineItemField(${idx}, 'discountMode', this.value)" class="p-2 bg-slate-200 text-slate-700 text-xs font-bold rounded-l-lg border border-slate-300" title="Discount type">
+                    <option value="pct" ${item.discountMode !== 'flat' ? 'selected' : ''}>%</option>
+                    <option value="flat" ${item.discountMode === 'flat' ? 'selected' : ''}>₹</option>
+                  </select>
+                  <input type="number" min="0" ${item.discountMode === 'flat' ? '' : 'max="100"'} step="any" value="${esc(item.discountMode === 'flat' ? (item.discountFlat || 0) : (item.discountPct !== undefined ? item.discountPct : 0))}" oninput="updateLineItemField(${idx}, 'discountValue', this.value)" onchange="updateLineItemField(${idx}, 'discountValue', this.value)" class="w-full min-w-0 p-2 bg-white border border-slate-300 rounded-r-lg text-xs font-mono font-bold text-center focus:ring-1 focus:ring-indigo-500" title="${item.discountMode === 'flat' ? 'Flat amount off this line (₹)' : 'Percent off this line'}">
                 </div>
               </div>
 
@@ -13262,6 +13285,17 @@ function sha256hex(msg){
     if (!activeOrderLineItems[idx]) return;
     if (field === 'qty') {
       activeOrderLineItems[idx].qty = Math.max(1, parseInt(val, 10) || 1);
+    } else if (field === 'discountMode') {
+      activeOrderLineItems[idx].discountMode = val === 'flat' ? 'flat' : 'pct';
+      activeOrderLineItems[idx].discountEdited = true;
+      renderOrderLineItems();
+      recalculateLiveOrderSummary();
+      return;
+    } else if (field === 'discountValue') {
+      const n = Math.max(0, parseFloat(val) || 0);
+      if (activeOrderLineItems[idx].discountMode === 'flat') activeOrderLineItems[idx].discountFlat = n;
+      else activeOrderLineItems[idx].discountPct = Math.min(100, n);
+      activeOrderLineItems[idx].discountEdited = true;
     } else if (field === 'discountPct') {
       activeOrderLineItems[idx].discountPct = Math.min(100, Math.max(0, parseFloat(val) || 0));
       activeOrderLineItems[idx].discountEdited = true;
@@ -13272,8 +13306,8 @@ function sha256hex(msg){
     const prd = MEDTECH_PRODUCT_CATALOG.find(p => p.id === activeOrderLineItems[idx].productId) || MEDTECH_PRODUCT_CATALOG[0];
     const qty = activeOrderLineItems[idx].qty;
     const lineGross = prd.basePrice * qty;
-    const discPct = activeOrderLineItems[idx].discountPct || 0;
-    const lineDisc = Math.round((lineGross * discPct) / 100);
+    const _ld = lineDiscountCalc(activeOrderLineItems[idx], lineGross); const discPct = _ld.pct;
+    const lineDisc = _ld.disc;
     const lineNet = lineGross - lineDisc;
     const lineEl = document.getElementById(`lineNet_${idx}`);
     if (lineEl) lineEl.innerText = `₹${lineNet.toLocaleString('en-IN')}`;
@@ -13291,8 +13325,7 @@ function sha256hex(msg){
       if (prd) {
         const qty = parseInt(it.qty, 10) || 1;
         const lineGross = prd.basePrice * qty;
-        const discPct = Math.min(100, Math.max(0, parseFloat(it.discountPct) || 0));
-        const lineDisc = Math.round((lineGross * discPct) / 100);
+        const _ld = lineDiscountCalc(it, lineGross); const discPct = _ld.pct; const lineDisc = _ld.disc;
         grossSubtotal += lineGross;
         totalCustomDiscount += lineDisc;
       }
@@ -13436,8 +13469,7 @@ function sha256hex(msg){
       const qty = parseInt(it.qty, 10) || 1;
       if (qty < (parseInt(prd.minQty, 10) || 1)) moqViolations.push(`${prd.name} (minimum ${prd.minQty})`);
       const lineGross = prd.basePrice * qty;
-      const discPct = Math.min(100, Math.max(0, parseFloat(it.discountPct) || 0));
-      const lineDisc = Math.round((lineGross * discPct) / 100);
+      const _ld = lineDiscountCalc(it, lineGross); const discPct = _ld.pct; const lineDisc = _ld.disc;
       const lineNet = lineGross - lineDisc;
 
 
@@ -13449,7 +13481,9 @@ function sha256hex(msg){
         name: prd.name,
         qty: qty,
         price: prd.basePrice,
-        discountPct: discPct,
+        discountMode: it.discountMode === 'flat' ? 'flat' : 'pct',
+        discountFlat: it.discountMode === 'flat' ? lineDisc : 0,
+        discountPct: Math.round(discPct * 100) / 100,
         discountAmount: lineDisc,
         netTotal: lineNet
       };
@@ -14017,31 +14051,31 @@ function sha256hex(msg){
           <!-- 2. W1 PROJ / ACT (₹ L) -->
           <td class="p-3.5 border-r border-slate-200 font-mono text-xs text-center whitespace-nowrap">
             <div class="font-bold text-slate-900">${esc(item.w1)} / <strong class="text-blue-600">${w1A}L</strong></div>
-            <span class="block text-[10px] text-slate-500 font-medium truncate mt-0.5 max-w-[130px]" title="${esc(item.w1_product || 'Product')}">${esc(item.w1_product || 'Product')}</span>
+            ${(window.projWeekCellHtml ? window.projWeekCellHtml(item, 'w1', pMonth, pYear) : '')}
           </td>
 
           <!-- 3. W2 PROJ / ACT (₹ L) -->
           <td class="p-3.5 border-r border-slate-200 font-mono text-xs text-center whitespace-nowrap">
             <div class="font-bold text-slate-900">${esc(item.w2)} / <strong class="text-blue-600">${w2A}L</strong></div>
-            <span class="block text-[10px] text-slate-500 font-medium truncate mt-0.5 max-w-[130px]" title="${esc(item.w2_product || 'Product')}">${esc(item.w2_product || 'Product')}</span>
+            ${(window.projWeekCellHtml ? window.projWeekCellHtml(item, 'w2', pMonth, pYear) : '')}
           </td>
 
           <!-- 4. W3 PROJ / ACT (₹ L) -->
           <td class="p-3.5 border-r border-slate-200 font-mono text-xs text-center whitespace-nowrap">
             <div class="font-bold text-slate-900">${esc(item.w3)} / <strong class="text-blue-600">${w3A}L</strong></div>
-            <span class="block text-[10px] text-slate-500 font-medium truncate mt-0.5 max-w-[130px]" title="${esc(item.w3_product || 'Product')}">${esc(item.w3_product || 'Product')}</span>
+            ${(window.projWeekCellHtml ? window.projWeekCellHtml(item, 'w3', pMonth, pYear) : '')}
           </td>
 
           <!-- 5. W4 PROJ / ACT (₹ L) -->
           <td class="p-3.5 border-r border-slate-200 font-mono text-xs text-center whitespace-nowrap">
             <div class="font-bold text-slate-900">${esc(item.w4)} / <strong class="text-blue-600">${w4A}L</strong></div>
-            <span class="block text-[10px] text-slate-500 font-medium truncate mt-0.5 max-w-[130px]" title="${esc(item.w4_product || 'Product')}">${esc(item.w4_product || 'Product')}</span>
+            ${(window.projWeekCellHtml ? window.projWeekCellHtml(item, 'w4', pMonth, pYear) : '')}
           </td>
 
           <!-- 6. W5 PROJ / ACT (₹ L) -->
           <td class="p-3.5 border-r border-slate-200 font-mono text-xs text-center whitespace-nowrap">
             <div class="font-bold text-slate-900">${esc(item.w5)} / <strong class="text-blue-600">${w5A}L</strong></div>
-            <span class="block text-[10px] text-slate-500 font-medium truncate mt-0.5 max-w-[130px]" title="${esc(item.w5_product || 'Product')}">${esc(item.w5_product || 'Product')}</span>
+            ${(window.projWeekCellHtml ? window.projWeekCellHtml(item, 'w5', pMonth, pYear) : '')}
           </td>
 
           <!-- 7. MONTH TARGET (₹ LAKHS) -->
@@ -14061,7 +14095,7 @@ function sha256hex(msg){
 
           <!-- 10. PROJECTION INPUT (Matching Image 2: Edit PD (RSM)+ Order / Edit SD (ASM)+ Order) -->
           <td class="p-3.5 text-center whitespace-nowrap">
-            <button onclick="triggerEditDealerProjection(${idx})" class="w-full px-3 py-1.5 ${isPD ? 'bg-[#4338ca] hover:bg-[#3730a3]' : 'bg-[#0d9488] hover:bg-[#0f766e]'} text-white rounded-lg text-xs font-bold shadow-sm transition-all" title="Edit commitments & book order">
+            <button onclick="triggerEditDealerProjection(${(function(){ const k = FIXED_PROJECTIONS_DATA.indexOf(item); return k > -1 ? k : idx; })()})" class="w-full px-3 py-1.5 ${isPD ? 'bg-[#4338ca] hover:bg-[#3730a3]' : 'bg-[#0d9488] hover:bg-[#0f766e]'} text-white rounded-lg text-xs font-bold shadow-sm transition-all" title="Edit commitments & book order">
               ${isPD ? 'Edit PD (RSM)+ Order' : 'Edit SD (ASM)+ Order'}
             </button>
           </td>
@@ -14102,6 +14136,7 @@ function sha256hex(msg){
     if (elCount) elCount.innerText = displayList.length;
 
     lucide.createIcons();
+    if (window.renderProjPipeline) { try { window.renderProjPipeline(); } catch (e) { console.error('[pipeline]', e); } }
   };
 
   // Open In-App Projection Edit Modal with direct order booking capability
@@ -14146,6 +14181,7 @@ function sha256hex(msg){
 
     document.getElementById('editProjNote').value = item.rsmNote || 'Quota target aligned with territory beat coverage.';
 
+    if (window.projPlanReset) window.projPlanReset('edit', item);
     recalcEditProjTotals();
     openModal('modalEditDealerProjection');
   };
@@ -14210,6 +14246,7 @@ function sha256hex(msg){
     item.target = `₹${targetTot.toFixed(0)} L`;
     item.rsmNote = document.getElementById('editProjNote').value.trim();
     item.period = appState.projectionMonth || defaultProjectionPeriod();
+    if (window.projPlanApply) window.projPlanApply('edit', item);
 
     closeModal('modalEditDealerProjection');
     renderProjectionsTable();
@@ -14694,6 +14731,7 @@ function sha256hex(msg){
       const ySel = document.getElementById('newProjYearSelect');
       if (mSel) mSel.value = parts[0] || defaultProjectionPeriod().split(' ')[0];
       if (ySel) ySel.value = parts[1] || defaultProjectionPeriod().split(' ')[1];
+      if (window.projPlanReset) window.projPlanReset('add', null);
     }
     if (origOpenModal) origOpenModal(modalId);
   };
@@ -17875,11 +17913,16 @@ function sha256hex(msg){
         </div>
 
         <div class="grid grid-cols-5 gap-2">
-          <div><label class="block font-bold text-slate-500 text-[10px]">W1 (₹ L)</label><input type="number" step="0.1" id="newProjW1" value="2.5" class="w-full p-1.5 border border-slate-300 rounded text-center"></div>
-          <div><label class="block font-bold text-slate-500 text-[10px]">W2 (₹ L)</label><input type="number" step="0.1" id="newProjW2" value="3.0" class="w-full p-1.5 border border-slate-300 rounded text-center"></div>
-          <div><label class="block font-bold text-slate-500 text-[10px]">W3 (₹ L)</label><input type="number" step="0.1" id="newProjW3" value="3.5" class="w-full p-1.5 border border-slate-300 rounded text-center"></div>
-          <div><label class="block font-bold text-slate-500 text-[10px]">W4 (₹ L)</label><input type="number" step="0.1" id="newProjW4" value="4.0" class="w-full p-1.5 border border-slate-300 rounded text-center"></div>
-          <div><label class="block font-bold text-slate-500 text-[10px]">W5 (₹ L)</label><input type="number" step="0.1" id="newProjW5" value="2.0" class="w-full p-1.5 border border-slate-300 rounded text-center"></div>
+          <div><label class="block font-bold text-slate-500 text-[10px]">W1 (₹ L)</label><input type="number" step="any" id="newProjW1" value="2.5" class="w-full p-1.5 border border-slate-300 rounded text-center"></div>
+          <div><label class="block font-bold text-slate-500 text-[10px]">W2 (₹ L)</label><input type="number" step="any" id="newProjW2" value="3.0" class="w-full p-1.5 border border-slate-300 rounded text-center"></div>
+          <div><label class="block font-bold text-slate-500 text-[10px]">W3 (₹ L)</label><input type="number" step="any" id="newProjW3" value="3.5" class="w-full p-1.5 border border-slate-300 rounded text-center"></div>
+          <div><label class="block font-bold text-slate-500 text-[10px]">W4 (₹ L)</label><input type="number" step="any" id="newProjW4" value="4.0" class="w-full p-1.5 border border-slate-300 rounded text-center"></div>
+          <div><label class="block font-bold text-slate-500 text-[10px]">W5 (₹ L)</label><input type="number" step="any" id="newProjW5" value="2.0" class="w-full p-1.5 border border-slate-300 rounded text-center"></div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">What do we expect each week? <span class="font-normal text-slate-500">(optional: pick products and quantity, the ₹ value fills in from the price list)</span></label>
+          <div id="projPlanner_add" class="space-y-2"></div>
         </div>
 
         <div class="pt-3 flex justify-end space-x-2 border-t border-slate-100">
@@ -18085,12 +18128,17 @@ function sha256hex(msg){
         <div>
           <label class="block font-bold text-slate-700 mb-1">Weekly Projected Targets (₹ Lakhs):</label>
           <div class="grid grid-cols-5 gap-2">
-            <div><label class="block text-[10px] text-slate-500 font-mono">W1</label><input type="number" step="0.5" id="editProjW1" oninput="recalcEditProjTotals()" class="w-full p-1.5 border border-slate-300 rounded-lg text-center font-bold font-mono"></div>
-            <div><label class="block text-[10px] text-slate-500 font-mono">W2</label><input type="number" step="0.5" id="editProjW2" oninput="recalcEditProjTotals()" class="w-full p-1.5 border border-slate-300 rounded-lg text-center font-bold font-mono"></div>
-            <div><label class="block text-[10px] text-slate-500 font-mono">W3</label><input type="number" step="0.5" id="editProjW3" oninput="recalcEditProjTotals()" class="w-full p-1.5 border border-slate-300 rounded-lg text-center font-bold font-mono"></div>
-            <div><label class="block text-[10px] text-slate-500 font-mono">W4</label><input type="number" step="0.5" id="editProjW4" oninput="recalcEditProjTotals()" class="w-full p-1.5 border border-slate-300 rounded-lg text-center font-bold font-mono"></div>
-            <div><label class="block text-[10px] text-slate-500 font-mono">W5</label><input type="number" step="0.5" id="editProjW5" oninput="recalcEditProjTotals()" class="w-full p-1.5 border border-slate-300 rounded-lg text-center font-bold font-mono"></div>
+            <div><label class="block text-[10px] text-slate-500 font-mono">W1</label><input type="number" step="any" id="editProjW1" oninput="recalcEditProjTotals()" class="w-full p-1.5 border border-slate-300 rounded-lg text-center font-bold font-mono"></div>
+            <div><label class="block text-[10px] text-slate-500 font-mono">W2</label><input type="number" step="any" id="editProjW2" oninput="recalcEditProjTotals()" class="w-full p-1.5 border border-slate-300 rounded-lg text-center font-bold font-mono"></div>
+            <div><label class="block text-[10px] text-slate-500 font-mono">W3</label><input type="number" step="any" id="editProjW3" oninput="recalcEditProjTotals()" class="w-full p-1.5 border border-slate-300 rounded-lg text-center font-bold font-mono"></div>
+            <div><label class="block text-[10px] text-slate-500 font-mono">W4</label><input type="number" step="any" id="editProjW4" oninput="recalcEditProjTotals()" class="w-full p-1.5 border border-slate-300 rounded-lg text-center font-bold font-mono"></div>
+            <div><label class="block text-[10px] text-slate-500 font-mono">W5</label><input type="number" step="any" id="editProjW5" oninput="recalcEditProjTotals()" class="w-full p-1.5 border border-slate-300 rounded-lg text-center font-bold font-mono"></div>
           </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Expected products by week <span class="font-normal text-slate-500">(₹ value fills in from the price list)</span></label>
+          <div id="projPlanner_edit" class="space-y-2"></div>
         </div>
 
         <div>
@@ -18223,6 +18271,216 @@ function sha256hex(msg){
   <!-- MOBILE SIDEBAR BACKDROP OVERLAY -->
   <div id="sidebarBackdrop" onclick="closeMobileSidebar()" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-35 lg:hidden transition-opacity"></div>
 
+<script>
+/* ===== Weekly product plan + Order pipeline (repeat vs new PD/SD) ===== */
+(function () {
+  var WK = ['w1', 'w2', 'w3', 'w4', 'w5'];
+  var plans = { add: {}, edit: {} };
+  function cat() { return window.MEDTECH_PRODUCT_CATALOG || []; }
+  function prod(id) { return cat().filter(function (p) { return p.id === id; })[0] || null; }
+  function orderable() { return cat().filter(function (p) { return p.status !== 'Discontinued'; }); }
+  function shortName(p) { return String(p && p.name || '').replace(/^Evox\s+/i, '').replace(/\s*\(.*?\)\s*/g, ' ').trim().slice(0, 28); }
+  function weekLakhs(arr) { return (arr || []).reduce(function (a, x) { var p = prod(x.p); return a + (p ? p.basePrice * (Number(x.q) || 0) : 0); }, 0) / 100000; }
+  function esc(v) { return window.esc(v); }
+
+  window.projPlanReset = function (ctx, item) {
+    var src = (item && item.plan) || {}, o = {};
+    WK.forEach(function (w) { o[w] = (src[w] || []).map(function (x) { return { p: x.p, q: x.q }; }); });
+    plans[ctx] = o; render(ctx); syncInputs(ctx);
+  };
+  window.projPlanAdd = function (ctx, w) {
+    var f = orderable()[0]; if (!f) return;
+    plans[ctx][w].push({ p: f.id, q: 1 }); render(ctx); syncInputs(ctx);
+  };
+  window.projPlanRemove = function (ctx, w, i) { plans[ctx][w].splice(i, 1); render(ctx); syncInputs(ctx); };
+  window.projPlanSet = function (ctx, w, i, field, val) {
+    var r = plans[ctx][w][i]; if (!r) return;
+    if (field === 'q') r.q = Math.max(1, parseInt(val, 10) || 1); else r.p = val;
+    if (field === 'p') render(ctx); else refreshWeekTotals(ctx);
+    syncInputs(ctx);
+  };
+  function inputId(ctx, w) { return (ctx === 'add' ? 'newProj' : 'editProj') + w.toUpperCase(); }
+  function syncInputs(ctx) {
+    WK.forEach(function (w) {
+      var el = document.getElementById(inputId(ctx, w)); if (!el) return;
+      var arr = plans[ctx][w] || [];
+      if (arr.length) { el.value = Math.round(weekLakhs(arr) * 100) / 100; el.readOnly = true; el.title = 'Calculated from the products planned for this week'; el.classList.add('bg-slate-100'); }
+      else { el.readOnly = false; el.title = ''; el.classList.remove('bg-slate-100'); }
+    });
+    if (ctx === 'edit' && typeof window.recalcEditProjTotals === 'function') window.recalcEditProjTotals();
+  }
+  function refreshWeekTotals(ctx) {
+    WK.forEach(function (w) { var n = document.getElementById('projPlanTot_' + ctx + '_' + w); if (n) n.innerText = '₹' + (Math.round(weekLakhs(plans[ctx][w]) * 100) / 100) + ' L'; });
+  }
+  function render(ctx) {
+    var box = document.getElementById('projPlanner_' + ctx); if (!box) return;
+    var opts = orderable();
+    box.innerHTML = WK.map(function (w, wi) {
+      var rows = (plans[ctx][w] || []).map(function (r, i) {
+        return '<div class="flex items-center gap-1.5">' +
+          '<select onchange="projPlanSet(\'' + ctx + '\',\'' + w + '\',' + i + ',\'p\',this.value)" class="flex-1 min-w-0 p-1.5 bg-white border border-slate-300 rounded-lg text-[11px] font-semibold">' +
+          opts.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === r.p ? ' selected' : '') + '>' + esc(shortName(p)) + ' — ₹' + Number(p.basePrice).toLocaleString('en-IN') + '</option>'; }).join('') + '</select>' +
+          '<input type="number" min="1" value="' + esc(r.q) + '" oninput="projPlanSet(\'' + ctx + '\',\'' + w + '\',' + i + ',\'q\',this.value)" class="w-16 p-1.5 border border-slate-300 rounded-lg text-center font-mono font-bold text-[11px]" title="Quantity">' +
+          '<button type="button" onclick="projPlanRemove(\'' + ctx + '\',\'' + w + '\',' + i + ')" class="p-1 text-slate-400 hover:text-rose-600" title="Remove">&times;</button></div>';
+      }).join('');
+      return '<div class="p-2 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">' +
+        '<div class="flex items-center justify-between"><span class="font-bold text-[11px] text-slate-700">Week ' + (wi + 1) + '</span>' +
+        '<span class="font-mono text-[11px] font-bold text-emerald-700" id="projPlanTot_' + ctx + '_' + w + '">₹' + (Math.round(weekLakhs(plans[ctx][w]) * 100) / 100) + ' L</span></div>' + rows +
+        '<button type="button" onclick="projPlanAdd(\'' + ctx + '\',\'' + w + '\')" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800">+ Add product</button></div>';
+    }).join('');
+  }
+  window.projPlanApply = function (ctx, item) {
+    if (!item) return;
+    var plan = {}, any = false;
+    WK.forEach(function (w) {
+      var arr = (plans[ctx][w] || []).filter(function (x) { return prod(x.p) && x.q > 0; });
+      if (arr.length) {
+        plan[w] = arr.map(function (x) { return { p: x.p, q: x.q }; }); any = true;
+        item[w] = (Math.round(weekLakhs(arr) * 100) / 100) + 'L';
+        item[w + '_product'] = arr.map(function (x) { return x.q + '× ' + shortName(prod(x.p)); }).join(', ');
+      }
+    });
+    if (any) {
+      item.plan = plan;
+      var tot = WK.reduce(function (a, w) { return a + parseFloat(String(item[w] || '0').replace(/[^0-9.]/g, '') || 0); }, 0);
+      item.target = '₹' + tot.toFixed(0) + ' L';
+    } else delete item.plan;
+  };
+
+  // product-wise actuals bagged by a dealer in the month (per week)
+  function dealerOrdersAll(d) {
+    var norm = function (x) { return String(x || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+    var cn = norm(cleanDealerName(d.name || ''));
+    return (window.appState.orders || []).filter(function (o) {
+      if (d.id && o.buyerId && o.buyerId === d.id) return true;
+      var b = norm(cleanDealerName(o.buyerName || ''));
+      return !!(cn && b && (b.indexOf(cn) !== -1 || cn.indexOf(b) !== -1));
+    });
+  }
+  var MONTHS = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };
+  function weekOf(day) { return day <= 7 ? 'w1' : day <= 14 ? 'w2' : day <= 21 ? 'w3' : day <= 28 ? 'w4' : 'w5'; }
+  function productActuals(d, mName, yStr) {
+    var m = MONTHS[String(mName).toLowerCase()], y = parseInt(yStr, 10), out = {};
+    WK.forEach(function (w) { out[w] = {}; });
+    dealerOrdersAll(d).forEach(function (o) {
+      var p = String(o.date || '').split('-'); if (p.length < 3 || +p[0] !== y || +p[1] !== m) return;
+      var w = weekOf(+p[2]);
+      (o.items || []).forEach(function (it) { var k = it.productId || it.name; out[w][k] = (out[w][k] || 0) + (Number(it.qty) || 0); });
+    });
+    return out;
+  }
+  function nameOfProductKey(k) { var p = prod(k); return p ? shortName(p) : String(k).replace(/^Evox\s+/i, '').slice(0, 28); }
+
+  window.projWeekCellHtml = function (item, w, mName, yStr) {
+    var planned = (item.plan && item.plan[w]) || [];
+    var d = { id: item.dealerId, name: item.name };
+    var act = productActuals(d, mName, yStr)[w] || {};
+    var html = '';
+    if (planned.length) {
+      html += planned.slice(0, 3).map(function (x) {
+        var got = act[x.p] || 0;
+        return '<span class="block text-[10px] text-slate-600 font-medium truncate max-w-[130px]" title="Planned ' + esc(x.q) + ' · bagged ' + esc(got) + '">' + esc(x.q) + '× ' + esc(shortName(prod(x.p) || { name: x.p })) + (got ? ' <b class="text-emerald-600">(' + esc(got) + ' bagged)</b>' : '') + '</span>';
+      }).join('') + (planned.length > 3 ? '<span class="block text-[10px] text-slate-400">+' + (planned.length - 3) + ' more</span>' : '');
+    } else {
+      html += '<span class="block text-[10px] text-slate-500 font-medium truncate mt-0.5 max-w-[130px]" title="' + esc(item[w + '_product'] || '') + '">' + esc(item[w + '_product'] || 'Product') + '</span>';
+    }
+    var extra = Object.keys(act).filter(function (k) { return !planned.some(function (x) { return x.p === k; }); });
+    if (extra.length) html += '<span class="block text-[10px] text-emerald-700 truncate max-w-[130px]">bagged: ' + extra.map(function (k) { return esc(act[k] + '× ' + nameOfProductKey(k)); }).join(', ') + '</span>';
+    return html;
+  };
+
+  // ---------------- order pipeline ----------------
+  window.switchProjView = function (v) {
+    var m = document.getElementById('projMatrixCard'), p = document.getElementById('projPipelineWrap');
+    if (m) m.style.display = v === 'pipeline' ? 'none' : '';
+    if (p) p.style.display = v === 'pipeline' ? '' : 'none';
+    var on = 'px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white', off = 'px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200';
+    var a = document.getElementById('projViewBtn-matrix'), b = document.getElementById('projViewBtn-pipeline');
+    if (a) a.className = v === 'pipeline' ? off : on; if (b) b.className = v === 'pipeline' ? on : off;
+    if (v === 'pipeline') window.renderProjPipeline();
+  };
+  function L1(x) { return (Math.round(x * 10) / 10).toFixed(1); }
+  function stateOk(st, f) { if (!f || f === 'All') return true; st = String(st || '').toLowerCase(); f = f.toLowerCase(); return !!st && (st.indexOf(f) !== -1 || f.indexOf(st) !== -1); }
+  function productsOfPlan(plan) {
+    var agg = {};
+    WK.forEach(function (w) { ((plan && plan[w]) || []).forEach(function (x) { agg[x.p] = (agg[x.p] || 0) + x.q; }); });
+    return Object.keys(agg).map(function (k) { return agg[k] + '× ' + nameOfProductKey(k); }).join(', ');
+  }
+  window.renderProjPipeline = function () {
+    var wrap = document.getElementById('projPipelineWrap'); if (!wrap || wrap.style.display === 'none') return;
+    var A = window.appState, period = A.projectionMonth || defaultProjectionPeriod(), parts = period.split(' '), mName = parts[0], yStr = parts[1];
+    var mNum = MONTHS[mName.toLowerCase()], yNum = parseInt(yStr, 10), periodStart = yNum * 10000 + mNum * 100 + 1;
+    var f = A.globalStateFilter || 'All';
+    var dateKey = function (o) { var p = String(o.date || '').split('-'); return p.length < 3 ? 0 : (+p[0]) * 10000 + (+p[1]) * 100 + (+p[2]); };
+    var projs = window.FIXED_PROJECTIONS_DATA.filter(function (p) { return (p.period || defaultProjectionPeriod()) === period; });
+    var cn = function (x) { return cleanDealerName(x || '').toLowerCase(); };
+    var dealers = [];
+    (A.pds || []).forEach(function (d) { dealers.push({ id: d.id, name: d.name, type: 'PD', state: d.state, city: d.city, asm: d.assignedAsm || d.rep || '', since: d.onboardedOn || d.createdAt || d.date || '' }); });
+    (A.sds || []).forEach(function (d) { dealers.push({ id: d.id, name: d.name, type: 'SD', state: d.state, city: d.city, asm: d.assignedAsm || d.rep || '', since: d.onboardedOn || d.createdAt || d.date || '' }); });
+    projs.forEach(function (p) { if (!dealers.some(function (d) { return (p.dealerId && d.id === p.dealerId) || cn(d.name) === cn(p.name); })) dealers.push({ id: p.dealerId || null, name: cn(p.name), type: p.type, state: p.state, asm: p.assignedAsm || p.rep || '', since: '' }); });
+    var rep = [], neu = [], noProj = [];
+    dealers.forEach(function (d) {
+      if (!stateOk(d.state, f)) return;
+      var pr = projs.filter(function (p) { return (p.dealerId && p.dealerId === d.id) || cn(p.name) === cn(d.name); })[0] || null;
+      var all = dealerOrdersAll(d);
+      var before = all.filter(function (o) { return dateKey(o) && dateKey(o) < periodStart; });
+      var act = window.getDealerOrdersActuals(d.id, d.name, mName, yStr);
+      var projL = pr ? WK.reduce(function (a, w) { return a + parseProjectionNum(pr[w]); }, 0) : 0;
+      var row = { d: d, pr: pr, projL: projL, actL: act.totalLakhs, act: act, firstOrder: all.length ? all.map(function (o) { return o.date; }).sort()[0] : '', prods: pr ? productsOfPlan(pr.plan) || (pr.line || '') : '' };
+      if (before.length) rep.push(row);
+      else if (pr || act.orderCount) neu.push(row);
+      else noProj.push(row);
+    });
+    var sum = function (arr, k) { return arr.reduce(function (a, r) { return a + r[k]; }, 0); };
+    var tile = function (t, v, sub, cls) { return '<div class="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-xs"><span class="text-[10px] font-bold uppercase text-slate-500">' + t + '</span><div class="text-xl font-bold mt-1 ' + cls + '">' + v + '</div><span class="text-[11px] text-slate-500">' + sub + '</span></div>'; };
+    var converted = neu.filter(function (r) { return r.act.orderCount > 0; }).length;
+    var wkLabel = function (pr) { if (!pr) return '—'; for (var i = 0; i < 5; i++) if (parseProjectionNum(pr[WK[i]]) > 0) return 'Week ' + (i + 1); return '—'; };
+    var editBtn = function (r) {
+      if (!r.pr) return '<button type="button" onclick="projectForDealer(\'' + escJs(r.d.name) + '\',\'' + r.d.type + '\')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold">+ Add projection</button>';
+      var i = window.FIXED_PROJECTIONS_DATA.indexOf(r.pr);
+      return '<button type="button" onclick="triggerEditDealerProjection(' + i + ')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-[11px] font-bold">Edit projection</button>';
+    };
+    var typeBadge = function (t) { return '<span class="px-2 py-0.5 rounded text-[10px] font-bold ' + (t === 'PD' ? 'bg-indigo-100 text-indigo-700' : 'bg-teal-100 text-teal-700') + '">' + esc(t) + '</span>'; };
+    var th = function (c) { return '<th class="p-2.5">' + c + '</th>'; };
+    var repRows = rep.length ? rep.map(function (r) {
+      var pend = Math.max(0, r.projL - r.actL), pace = r.projL ? Math.round(r.actL / r.projL * 100) : 0;
+      return '<tr class="hover:bg-slate-50"><td class="p-2.5 font-bold text-slate-900">' + esc(r.d.name) + '<span class="block text-[10px] text-slate-400 font-medium">' + esc([r.d.city, r.d.state].filter(Boolean).join(', ')) + '</span></td><td class="p-2.5">' + typeBadge(r.d.type) + '</td><td class="p-2.5 text-slate-600">' + esc(r.d.asm || '—') + '</td>' +
+        '<td class="p-2.5 text-[11px] text-slate-600 max-w-[220px]">' + esc(r.prods || (r.pr ? '' : 'No projection yet')) + '</td>' +
+        '<td class="p-2.5 font-mono font-bold text-center">₹' + L1(r.projL) + ' L</td><td class="p-2.5 font-mono font-bold text-center text-emerald-600">₹' + L1(r.actL) + ' L</td><td class="p-2.5 font-mono font-bold text-center text-amber-700">₹' + L1(pend) + ' L</td>' +
+        '<td class="p-2.5 text-center"><span class="px-2 py-0.5 rounded text-[11px] font-bold ' + (pace >= 50 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800') + '">' + (r.projL ? pace + '%' : '—') + '</span></td>' +
+        '<td class="p-2.5 text-right whitespace-nowrap">' + editBtn(r) + ' <button type="button" onclick="openCreateOrderForEntity(\'' + escJs(r.d.name) + '\',\'' + r.d.type + '\')" class="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-[11px] font-bold">+ Order</button></td></tr>';
+    }).join('') : '<tr><td colspan="9" class="p-6 text-center text-slate-400">No repeat dealers yet. A PD/SD appears here after the company has bagged an order from them.</td></tr>';
+    var neuAll = neu.concat(noProj);
+    var neuRows = neuAll.length ? neuAll.map(function (r) {
+      var status = r.act.orderCount ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">First order bagged ✓ ₹' + L1(r.actL) + ' L</span>' : r.pr ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">Awaiting first order</span>' : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">Not projected yet</span>';
+      return '<tr class="hover:bg-slate-50"><td class="p-2.5 font-bold text-slate-900">' + esc(r.d.name) + '<span class="block text-[10px] text-slate-400 font-medium">' + esc([r.d.city, r.d.state].filter(Boolean).join(', ')) + '</span></td><td class="p-2.5">' + typeBadge(r.d.type) + '</td><td class="p-2.5 text-slate-600">' + esc(r.d.asm || '—') + '</td>' +
+        '<td class="p-2.5 text-center text-slate-700 font-semibold">' + esc(wkLabel(r.pr)) + '</td><td class="p-2.5 text-[11px] text-slate-600 max-w-[220px]">' + esc(r.prods || '—') + '</td>' +
+        '<td class="p-2.5 font-mono font-bold text-center">' + (r.pr ? '₹' + L1(r.projL) + ' L' : '—') + '</td><td class="p-2.5">' + status + '</td><td class="p-2.5 text-right whitespace-nowrap">' + editBtn(r) + '</td></tr>';
+    }).join('') : '<tr><td colspan="8" class="p-6 text-center text-slate-400">No new PD/SD waiting for a first order.</td></tr>';
+    var tbl = function (head, body) { return '<div class="overflow-x-auto border border-slate-200 rounded-xl"><table class="w-full text-xs text-left min-w-[760px]"><thead class="bg-slate-50 text-slate-500 uppercase text-[10px]"><tr>' + head.map(th).join('') + '</tr></thead><tbody class="divide-y divide-slate-100">' + body + '</tbody></table></div>'; };
+    wrap.innerHTML =
+      '<div class="grid grid-cols-2 lg:grid-cols-4 gap-3">' +
+        tile('Repeat dealers · projected', '₹' + L1(sum(rep, 'projL')) + ' L', rep.length + ' PD/SD already ordering', 'text-slate-900') +
+        tile('Repeat dealers · bagged', '₹' + L1(sum(rep, 'actL')) + ' L', 'pending ₹' + L1(Math.max(0, sum(rep, 'projL') - sum(rep, 'actL'))) + ' L', 'text-emerald-600') +
+        tile('New PD/SD · expected first orders', '₹' + L1(sum(neuAll, 'projL')) + ' L', neuAll.length + ' not yet ordering before ' + esc(mName), 'text-indigo-700') +
+        tile('New PD/SD · converted', converted + ' of ' + neuAll.length, 'first order bagged in ' + esc(period), 'text-amber-700') +
+      '</div>' +
+      '<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2.5"><div><h3 class="text-sm font-bold text-slate-900">Repeat orders — dealers already working with the company</h3><p class="text-xs text-slate-500">Projection vs orders bagged in ' + esc(period) + '. Pending = projected minus bagged.</p></div>' +
+        tbl(['Dealer', 'Type', 'ASM', 'Products expected', 'Projected', 'Bagged', 'Pending', 'Pacing', 'Action'], repRows) + '</div>' +
+      '<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2.5"><div><h3 class="text-sm font-bold text-slate-900">New PD/SD — not started working with the company yet</h3><p class="text-xs text-slate-500">Order projection for first orders. A dealer moves to Repeat after its first order is bagged.</p></div>' +
+        tbl(['Dealer', 'Type', 'ASM', 'Expected first order', 'Products expected', 'Expected value', 'Status', 'Action'], neuRows) + '</div>';
+    if (window.lucide) lucide.createIcons();
+  };
+
+  window.projectForDealer = function (name, type) {
+    openModal('modalAddProjectionRow');
+    var t = document.getElementById('newProjTier'); if (t) { t.value = type === 'PD' ? 'Primary Distributor (PD)' : 'Secondary Distributor (SD)'; }
+    var st = document.getElementById('newProjState'); if (st) st.value = 'All';
+    populateNewProjDealers('All');
+    var s = document.getElementById('newProjDealerSelect'); if (s) s.value = name;
+  };
+})();
+</script>
 <script>
 /* ===== Evox Cloud sync (Supabase) ===== */
 (function () {
