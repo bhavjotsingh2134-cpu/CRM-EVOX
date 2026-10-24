@@ -5239,6 +5239,7 @@ function sha256hex(msg){
             <span id="dossierId" class="text-xs text-slate-400 font-mono"></span>
           </div>
           <h3 class="font-bold text-slate-900 text-base sm:text-lg mt-0.5 leading-tight" id="dossierName"></h3>
+          <button type="button" id="dossierFirstOrderBtn" style="display:none" onclick="askFirstOrder(window.activeDossierEntity.id, window.activeDossierType)" class="mt-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-[11px] font-bold">First order: not recorded. Set now</button>
           <p class="text-xs text-slate-500" id="dossierContactMeta"></p>
         </div>
         <div class="flex items-center space-x-1.5 flex-wrap gap-1 justify-start sm:justify-end">
@@ -7329,6 +7330,7 @@ function sha256hex(msg){
           convertedMonth: monthYearShort()
         };
         appState.pds.unshift(newPD);
+        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newPD.id, 'PD'); }, 450);   // first order done or not?
         
         migrateLeadHistory(lead.name, newPD.name, 'PD');
 
@@ -7367,6 +7369,7 @@ function sha256hex(msg){
           convertedMonth: monthYearShort()
         };
         appState.sds.unshift(newSD);
+        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newSD.id, 'SD'); }, 450);   // first order done or not?
         migrateLeadHistory(lead.name, newSD.name, 'SD');
 
 
@@ -7521,6 +7524,7 @@ function sha256hex(msg){
       };
 
       appState.pds.unshift(newPD);
+        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newPD.id, 'PD'); }, 450);   // first order done or not?
       appState.leads = appState.leads.filter(l => l.id !== p.leadId);
       migrateLeadHistory(p.leadName, newPD.name, 'PD');
 
@@ -7579,6 +7583,7 @@ function sha256hex(msg){
       };
 
       appState.sds.unshift(newSD);
+        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newSD.id, 'SD'); }, 450);   // first order done or not?
       appState.leads = appState.leads.filter(l => l.id !== p.leadId);
       migrateLeadHistory(p.leadName, newSD.name, 'SD');
 
@@ -11004,6 +11009,7 @@ function sha256hex(msg){
           activeSubDealers: 8
         };
         appState.pds.unshift(newPD);
+        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newPD.id, 'PD'); }, 450);   // first order done or not?
 
         // Also add to FIXED_PROJECTIONS_DATA so it appears in Dealer Projections
         /* projections are added by the ASM/RSM in Dealer projection, not auto-generated */
@@ -11039,6 +11045,7 @@ function sha256hex(msg){
           fulfillmentRate: '96.5%'
         };
         appState.sds.unshift(newSD);
+        setTimeout(function () { if (window.askFirstOrder) window.askFirstOrder(newSD.id, 'SD'); }, 450);   // first order done or not?
         
 
         // Also add to FIXED_PROJECTIONS_DATA so the new SD is immediately available in Dealer projection!
@@ -18271,6 +18278,59 @@ function sha256hex(msg){
   <!-- MOBILE SIDEBAR BACKDROP OVERLAY -->
   <div id="sidebarBackdrop" onclick="closeMobileSidebar()" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-35 lg:hidden transition-opacity"></div>
 
+<!-- MODAL: FIRST ORDER STATUS FOR A NEW PD / SD -->
+<div id="firstOrderModal" class="hidden fixed inset-0 z-[70] overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+  <div class="bg-white rounded-2xl max-w-lg w-full p-4 sm:p-5 shadow-2xl border border-slate-100 max-h-[92vh] overflow-y-auto">
+    <div class="flex items-start justify-between pb-3 border-b border-slate-100">
+      <div>
+        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 uppercase" id="foTypeBadge">PD</span>
+        <h3 class="font-bold text-slate-900 text-base mt-0.5" id="foTitle">First order</h3>
+        <p class="text-xs text-slate-500">Has this dealer already placed its first order with the company?</p>
+      </div>
+      <button type="button" onclick="closeModal('firstOrderModal')" class="text-slate-400 hover:text-slate-600 p-1">&times;</button>
+    </div>
+    <form onsubmit="saveFirstOrder(event)" class="mt-4 space-y-3.5 text-xs">
+      <input type="hidden" id="foEntityId"><input type="hidden" id="foEntityType">
+      <div class="grid grid-cols-2 gap-3">
+        <label class="cursor-pointer border border-slate-200 rounded-xl p-2.5 flex items-center gap-2 has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50">
+          <input type="radio" name="foDone" value="yes" onchange="foToggle()" class="text-emerald-600"><span class="font-bold text-slate-800">Yes, first order done</span>
+        </label>
+        <label class="cursor-pointer border border-slate-200 rounded-xl p-2.5 flex items-center gap-2 has-[:checked]:border-amber-600 has-[:checked]:bg-amber-50">
+          <input type="radio" name="foDone" value="no" checked onchange="foToggle()" class="text-amber-600"><span class="font-bold text-slate-800">No, not yet</span>
+        </label>
+      </div>
+      <div id="foYesBox" style="display:none" class="space-y-3">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Date of first order</label>
+          <input type="date" id="foDate" class="w-full p-2.5 border border-slate-300 rounded-xl">
+        </div>
+        <p class="text-[11px] text-slate-500">It is saved as a past order, so this dealer counts as a repeat dealer from now on.</p>
+      </div>
+      <div id="foNoBox" class="space-y-3">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Expected date of first order</label>
+          <input type="date" id="foExpDate" class="w-full p-2.5 border border-slate-300 rounded-xl">
+        </div>
+        <p class="text-[11px] text-slate-500">It goes into the New PD/SD order pipeline as an order projection for that week.</p>
+      </div>
+      <div>
+        <label class="block font-semibold text-slate-700 mb-1"><span id="foProdLabel">Which products will they take?</span></label>
+        <div id="foRows" class="space-y-1.5"></div>
+        <button type="button" onclick="foAddRow()" class="mt-1.5 text-[11px] font-bold text-indigo-600 hover:text-indigo-800">+ Add product</button>
+      </div>
+      <div id="foValueBox" style="display:none">
+        <label class="block font-semibold text-slate-700 mb-1">First order value (₹, before taxes)</label>
+        <input type="number" min="0" step="any" id="foValue" class="w-full p-2.5 border border-slate-300 rounded-xl font-mono font-bold">
+        <p class="text-[10px] text-slate-400 mt-1">Filled from the products above at list price. Change it if the dealer got a discount, or type it directly if you don't remember the products.</p>
+      </div>
+      <div class="pt-3 flex justify-between gap-2 border-t border-slate-100">
+        <button type="button" onclick="closeModal('firstOrderModal')" class="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50">Decide later</button>
+        <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-bold shadow-sm">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 /* ===== Weekly product plan + Order pipeline (repeat vs new PD/SD) ===== */
 (function () {
@@ -18470,6 +18530,101 @@ function sha256hex(msg){
       '<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2.5"><div><h3 class="text-sm font-bold text-slate-900">New PD/SD — not started working with the company yet</h3><p class="text-xs text-slate-500">Order projection for first orders. A dealer moves to Repeat after its first order is bagged.</p></div>' +
         tbl(['Dealer', 'Type', 'ASM', 'Expected first order', 'Products expected', 'Expected value', 'Status', 'Action'], neuRows) + '</div>';
     if (window.lucide) lucide.createIcons();
+  };
+
+  // ---------------- first order status for a new PD / SD ----------------
+  var fo = { rows: [] };
+  function todayStr() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function addDays(n) { var d = new Date(); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function foYes() { var r = document.querySelector('input[name="foDone"]:checked'); return !!r && r.value === 'yes'; }
+  function foRender() {
+    var box = document.getElementById('foRows'); if (!box) return;
+    var opts = orderable();
+    box.innerHTML = fo.rows.map(function (r, i) {
+      return '<div class="flex items-center gap-1.5"><select onchange="foSet(' + i + ',\'p\',this.value)" class="flex-1 min-w-0 p-1.5 bg-white border border-slate-300 rounded-lg text-[11px] font-semibold">' +
+        opts.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === r.p ? ' selected' : '') + '>' + esc(shortName(p)) + ' — ₹' + Number(p.basePrice).toLocaleString('en-IN') + '</option>'; }).join('') + '</select>' +
+        '<input type="number" min="1" value="' + esc(r.q) + '" oninput="foSet(' + i + ',\'q\',this.value)" class="w-16 p-1.5 border border-slate-300 rounded-lg text-center font-mono font-bold text-[11px]" title="Quantity">' +
+        '<button type="button" onclick="foRemove(' + i + ')" class="p-1 text-slate-400 hover:text-rose-600">&times;</button></div>';
+    }).join('') || '<p class="text-[11px] text-slate-400">No product added yet.</p>';
+  }
+  function foListValue() { return fo.rows.reduce(function (a, r) { var p = prod(r.p); return a + (p ? p.basePrice * r.q : 0); }, 0); }
+  function foSyncValue() { var v = document.getElementById('foValue'); if (v && fo.rows.length) v.value = foListValue(); }
+  window.foAddRow = function () { var f = orderable()[0]; if (!f) return; fo.rows.push({ p: f.id, q: 1 }); foRender(); foSyncValue(); };
+  window.foRemove = function (i) { fo.rows.splice(i, 1); foRender(); foSyncValue(); };
+  window.foSet = function (i, field, val) { var r = fo.rows[i]; if (!r) return; if (field === 'q') r.q = Math.max(1, parseInt(val, 10) || 1); else r.p = val; if (field === 'p') foRender(); foSyncValue(); };
+  window.foToggle = function () {
+    var y = foYes();
+    document.getElementById('foYesBox').style.display = y ? '' : 'none';
+    document.getElementById('foValueBox').style.display = y ? '' : 'none';
+    document.getElementById('foNoBox').style.display = y ? 'none' : '';
+    document.getElementById('foProdLabel').innerText = y ? 'Products in the first order (optional)' : 'Which products will they take?';
+  };
+  window.askFirstOrder = function (id, type) {
+    var e = (type === 'PD' ? window.appState.pds : window.appState.sds).filter(function (x) { return x.id === id; })[0];
+    if (!e) return;
+    fo.rows = [];
+    document.getElementById('foEntityId').value = id; document.getElementById('foEntityType').value = type;
+    document.getElementById('foTitle').innerText = 'First order: ' + e.name;
+    var b = document.getElementById('foTypeBadge'); b.innerText = type;
+    document.querySelector('input[name="foDone"][value="no"]').checked = true;
+    document.getElementById('foDate').value = todayStr(); document.getElementById('foDate').max = todayStr();
+    document.getElementById('foExpDate').value = addDays(7); document.getElementById('foExpDate').min = todayStr();
+    document.getElementById('foValue').value = '';
+    foRender(); foToggle(); openModal('firstOrderModal');
+  };
+  window.saveFirstOrder = function (ev) {
+    ev.preventDefault();
+    var A = window.appState, id = document.getElementById('foEntityId').value, type = document.getElementById('foEntityType').value;
+    var e = (type === 'PD' ? A.pds : A.sds).filter(function (x) { return x.id === id; })[0]; if (!e) return;
+    var rows = fo.rows.filter(function (r) { return prod(r.p) && r.q > 0; });
+    var rep = e.assignedAsm || e.rep || (typeof currentRepName === 'function' ? currentRepName() : '');
+    if (foYes()) {
+      var date = document.getElementById('foDate').value, value = Math.round(parseFloat(document.getElementById('foValue').value) || 0);
+      if (!date) { showToast('Enter the date of the first order.', 'warning'); return; }
+      if (value <= 0) { showToast('Enter the first order value (or add products).', 'warning'); return; }
+      var items = rows.map(function (r) { var p = prod(r.p), g = p.basePrice * r.q; return { productId: p.id, name: p.name, qty: r.q, price: p.basePrice, discountMode: 'pct', discountFlat: 0, discountPct: 0, discountAmount: 0, netTotal: g }; });
+      var seller = 'Evox Central Factory Depot', sellerPdId = null, sellerType = 'PD';
+      if (type === 'SD') {
+        var par = (A.pds || []).filter(function (p) { return p.name === e.parentPd; })[0];
+        seller = par ? par.name + ' (' + par.id + ')' : (e.parentPd || 'Primary Distributor'); sellerPdId = par ? par.id : null;
+      }
+      A.orders.unshift({ id: uid('ORD-', 9019), type: type === 'PD' ? 'PRIMARY' : 'SECONDARY', buyerId: e.id, buyerName: e.name, buyerType: type, buyerState: e.state || 'Pan-India',
+        seller: seller, sellerPdId: sellerPdId, sellerType: sellerType, inquiryId: null, date: date, items: items, subtotal: value, discountAmount: 0, total: value, preTax: true,
+        status: 'Completed', historical: true, firstOrder: true, rep: rep, assignedAsm: rep });
+      e.firstOrderDone = true; e.firstOrderDate = date; e.lastOrderDate = date; e.totalOrders = (e.totalOrders || 0) + 1;
+      showToast('First order of ₹' + value.toLocaleString('en-IN') + ' recorded for ' + e.name + '.', 'success');
+    } else {
+      var exp = document.getElementById('foExpDate').value;
+      if (!exp) { showToast('Enter the expected date of the first order.', 'warning'); return; }
+      if (!rows.length) { showToast('Add at least one product they are expected to take.', 'warning'); return; }
+      var dt = new Date(exp + 'T00:00:00'), MN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      var period = MN[dt.getMonth()] + ' ' + dt.getFullYear(), wk = weekOf(dt.getDate());
+      var lakhs = Math.round(weekLakhs(rows) * 100) / 100;
+      var key = function (n) { return cleanDealerName(n || '').toLowerCase(); };
+      var row = window.FIXED_PROJECTIONS_DATA.filter(function (p) { return (p.period || defaultProjectionPeriod()) === period && ((p.dealerId && p.dealerId === e.id) || key(p.name) === key(e.name)); })[0];
+      if (!row) {
+        window.FIXED_PROJECTIONS_DATA.push({ name: 'Dealer ' + (window.FIXED_PROJECTIONS_DATA.length + 1) + ': ' + e.name + ' (' + type + ')', dealerId: e.id, role: type === 'PD' ? 'Given by RSM' : 'Given by ASM', type: type,
+          subtitle: type === 'PD' ? 'Tier-1 Wholesaler' : 'Sub-Dealer Stockist', line: 'Full Device Range', state: e.state || 'Pan-India', period: period, assignedAsm: rep, rep: rep,
+          w1: '0L', w2: '0L', w3: '0L', w4: '0L', w5: '0L', target: '₹0 L', newDealerFirstOrder: true });
+        row = window.FIXED_PROJECTIONS_DATA[window.FIXED_PROJECTIONS_DATA.length - 1];
+      }
+      var plan = row.plan || {}; plan[wk] = (plan[wk] || []).concat(rows.map(function (r) { return { p: r.p, q: r.q }; })); row.plan = plan;
+      var all = plan[wk]; row[wk] = (Math.round(weekLakhs(all) * 100) / 100) + 'L';
+      row[wk + '_product'] = all.map(function (x) { return x.q + '× ' + shortName(prod(x.p)); }).join(', ');
+      row.target = '₹' + WK.reduce(function (a, w) { return a + parseFloat(String(row[w] || '0').replace(/[^0-9.]/g, '') || 0); }, 0).toFixed(1) + ' L';
+      e.firstOrderDone = false; e.firstOrderExpected = exp; e.firstOrderProducts = rows.map(function (r) { return r.q + '× ' + shortName(prod(r.p)); }).join(', ');
+      showToast('Saved: ' + e.name + ' is in the New PD/SD pipeline for ' + period + ' (week ' + wk.slice(1) + ').', 'success');
+    }
+    closeModal('firstOrderModal');
+    ['renderOrdersTable', 'renderProjectionsTable', 'renderPDList', 'renderSDList', 'renderDashboard', 'updateBadgesAndCounters'].forEach(function (f) { try { if (typeof window[f] === 'function') window[f](); } catch (x) {} });
+    if (typeof saveLocalAppState === 'function') saveLocalAppState();
+  };
+  // show "set first order" on the dossier of a PD/SD that has not been asked yet
+  var _od = window.openDossierModal;
+  if (typeof _od === 'function') window.openDossierModal = function () {
+    var r = _od.apply(this, arguments);
+    try { var b = document.getElementById('dossierFirstOrderBtn'), e = window.activeDossierEntity, t = window.activeDossierType; if (b) b.style.display = (e && (t === 'PD' || t === 'SD') && e.firstOrderDone === undefined) ? '' : 'none'; } catch (x) {}
+    return r;
   };
 
   window.projectForDealer = function (name, type) {
